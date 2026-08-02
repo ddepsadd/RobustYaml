@@ -5,6 +5,7 @@
 build
 output
 .gradle
+.kotlin/
 .tmp
 
 # User-specific files
@@ -14,8 +15,10 @@ output
 *.cache
 
 # IDEs
+/.idea/.name
 /.idea/*.iml
 /.idea/*.xml
+/.idea/shelf/
 /.idea/.idea.*/*.iml
 /.idea/.idea.*/.idea/*.xml
 .vs
