@@ -17,6 +17,9 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeRootsProvider" />
     <colorSettingsPage
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlColorSettingsPage" />
+    <completion.contributor
+        language="yaml"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustComponentCompletionContributor" />
     <projectConfigurable
         id="com.jetbrains.rider.plugins.robustyaml.settings"
         parentId="tools"

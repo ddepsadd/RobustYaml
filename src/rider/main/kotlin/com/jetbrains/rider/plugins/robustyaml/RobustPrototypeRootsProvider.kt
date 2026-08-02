@@ -57,8 +57,26 @@ class RobustPrototypeRootsProvider : AdditionalLibraryRootsProvider() {
             }
         }
 
+        private const val MAX_SCANNED_ENTRIES = 5000
+
         private fun autoDetect(base: VirtualFile): List<VirtualFile> =
-            base.children.filter { it.isDirectory }.mapNotNull { it.findChild("Prototypes") }
+            base.children
+                .filter { it.isDirectory }
+                .mapNotNull { it.findChild("Prototypes") }
+                .filter { it.isDirectory && containsYaml(it) }
+
+        private fun containsYaml(dir: VirtualFile): Boolean {
+            val queue = ArrayDeque(listOf(dir))
+            var scanned = 0
+            while (queue.isNotEmpty() && scanned < MAX_SCANNED_ENTRIES) {
+                for (child in queue.removeFirst().children) {
+                    scanned++
+                    if (child.isDirectory) queue += child
+                    else if (child.extension.equals("yml", ignoreCase = true)) return true
+                }
+            }
+            return false
+        }
 
         private fun resolve(base: VirtualFile, path: String): VirtualFile? {
             val trimmed = path.trim()
