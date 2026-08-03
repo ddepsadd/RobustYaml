@@ -17,6 +17,45 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeRootsProvider" />
     <colorSettingsPage
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlColorSettingsPage" />
+    <fileBasedIndex
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustComponentNameIndex" />
+    <fileBasedIndex
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeKindIndex" />
+    <fileBasedIndex
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeIdIndex" />
+    <fileBasedIndex
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustDataFieldIndex" />
+    <localInspection
+        language="yaml"
+        shortName="RobustUnknownPrototypeId"
+        displayName="Unknown prototype id"
+        groupName="Robust YAML"
+        level="ERROR"
+        enabledByDefault="true"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustUnknownPrototypeIdInspection" />
+    <localInspection
+        language="yaml"
+        shortName="RobustDuplicatePrototypeId"
+        displayName="Duplicate prototype id"
+        groupName="Robust YAML"
+        level="ERROR"
+        enabledByDefault="true"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustDuplicatePrototypeIdInspection" />
+    <localInspection
+        language="yaml"
+        shortName="RobustUnknownField"
+        displayName="Unknown component or prototype field"
+        groupName="Robust YAML"
+        level="WEAK WARNING"
+        enabledByDefault="true"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustUnknownFieldInspection" />
+    <gotoSymbolContributor
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeSymbolContributor" />
+    <platform.backend.documentation.targetProvider
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustSpriteDocumentationProvider" />
+    <psi.referenceContributor
+        language="yaml"
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceContributor" />
     <completion.contributor
         language="yaml"
         implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustComponentCompletionContributor" />

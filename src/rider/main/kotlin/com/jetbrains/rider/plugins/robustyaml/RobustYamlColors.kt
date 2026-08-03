@@ -14,6 +14,11 @@ object RobustYamlColors {
         DefaultLanguageHighlighterColors.METADATA,
     )
 
+    val PROTOTYPE_ID: TextAttributesKey = TextAttributesKey.createTextAttributesKey(
+        "ROBUST_PROTOTYPE_ID",
+        DefaultLanguageHighlighterColors.GLOBAL_VARIABLE,
+    )
+
     val RESOURCE_PATH: TextAttributesKey = TextAttributesKey.createTextAttributesKey(
         "ROBUST_RESOURCE_PATH",
         DefaultLanguageHighlighterColors.STRING,

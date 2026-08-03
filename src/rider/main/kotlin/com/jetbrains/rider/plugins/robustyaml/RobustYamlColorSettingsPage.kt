@@ -17,7 +17,8 @@ class RobustYamlColorSettingsPage : ColorSettingsPage {
 
     override fun getDemoText(): String = """
         - type: <kind>entity</kind>
-          id: Flare
+          id: <id>Flare</id>
+          parent: <id>BaseItem</id>
           components:
           - type: <component>Sprite</component>
             sprite: <path>Objects/Misc/flare.rsi</path>
@@ -30,12 +31,14 @@ class RobustYamlColorSettingsPage : ColorSettingsPage {
     override fun getAdditionalHighlightingTagToDescriptorMap(): Map<String, TextAttributesKey> = mapOf(
         "kind" to RobustYamlColors.PROTOTYPE_KIND,
         "component" to RobustYamlColors.COMPONENT_NAME,
+        "id" to RobustYamlColors.PROTOTYPE_ID,
         "path" to RobustYamlColors.RESOURCE_PATH,
     )
 
     override fun getAttributeDescriptors(): Array<AttributesDescriptor> = arrayOf(
         AttributesDescriptor("Prototype kind", RobustYamlColors.PROTOTYPE_KIND),
         AttributesDescriptor("Component name", RobustYamlColors.COMPONENT_NAME),
+        AttributesDescriptor("Prototype id", RobustYamlColors.PROTOTYPE_ID),
         AttributesDescriptor("Resource path", RobustYamlColors.RESOURCE_PATH),
     )
 
