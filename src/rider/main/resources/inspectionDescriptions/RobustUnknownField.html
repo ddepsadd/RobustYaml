@@ -1,0 +1,15 @@
+<html>
+<body>
+Reports keys of a Robust Toolbox component or prototype that have no matching data field in C#.
+<p>
+    Fields are collected from <code>[DataField]</code>, <code>[IdDataField]</code>,
+    <code>[ParentDataField]</code>, <code>[AbstractDataField]</code> and <code>[IncludeDataField]</code>
+    along the inheritance chain of the class registered for that component or prototype kind.
+    Keys of nested structures are not checked: they belong to their own classes.
+</p>
+<p>
+    The index is a heuristic over C# sources, so a rare miss is possible; the severity is a weak warning
+    for that reason.
+</p>
+</body>
+</html>

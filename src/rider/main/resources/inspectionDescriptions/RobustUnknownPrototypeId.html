@@ -1,0 +1,11 @@
+<html>
+<body>
+Reports <code>parent</code>, <code>proto</code>, <code>prototype</code> and <code>entity</code> values
+that do not match any prototype id declared in the indexed YAML files.
+<p>
+    Values that are not ids are skipped: <code>null</code>, booleans, numbers, YAML tags
+    (<code>!type:...</code>) and anchors. The key <code>id</code> is not checked — inside components
+    it often holds animation or state names rather than prototype ids.
+</p>
+</body>
+</html>
