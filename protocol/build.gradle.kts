@@ -23,7 +23,7 @@ val RiderPluginId = providers.gradleProperty("RiderPluginId").get()
 
 rdgen {
     val csOutput = File(rootDir, "src/dotnet/${DotnetPluginId}")
-    val ktOutput = File(rootDir, "src/rider/main/kotlin/com/jetbrains/rider/plugins/${RiderPluginId.replace('.','/').lowercase()}")
+    val ktOutput = File(rootDir, "src/rider/main/kotlin/${RiderPluginId.replace('.','/').lowercase()}")
 
     verbose = true
     packages = "model.rider"

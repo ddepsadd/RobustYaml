@@ -1,6 +1,7 @@
 package com.jetbrains.rider.plugins.robustyaml
 
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.ProjectScope
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
@@ -48,6 +49,38 @@ object RobustDataFields {
             }
         }
     }
+
+    fun componentClass(project: Project, component: String): String? =
+        values(project, RobustDataFieldIndex.COMPONENT_KEY + component).firstOrNull()
+
+    fun prototypeClass(project: Project, kind: String): String? =
+        values(project, RobustDataFieldIndex.PROTOTYPE_KEY + kind).firstOrNull()
+
+    fun ownerOfField(project: Project, className: String, field: String): String? {
+        val queue = ArrayDeque(listOf(className))
+        val visited = mutableSetOf<String>()
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
+            if (!visited.add(current) || visited.size > MAX_HIERARCHY) continue
+            for (value in values(project, RobustDataFieldIndex.CLASS_KEY + current)) {
+                if (field in RobustDataFieldIndex.parseFields(value)) return current
+                queue += RobustDataFieldIndex.parseBases(value)
+            }
+        }
+        return null
+    }
+
+    fun basesOf(project: Project, className: String): List<String> =
+        values(project, RobustDataFieldIndex.CLASS_KEY + className)
+            .flatMap { RobustDataFieldIndex.parseBases(it) }
+            .distinct()
+
+    fun declaringFiles(project: Project, className: String): Collection<VirtualFile> =
+        FileBasedIndex.getInstance().getContainingFiles(
+            RobustDataFieldIndex.NAME,
+            RobustDataFieldIndex.CLASS_KEY + className,
+            ProjectScope.getContentScope(project),
+        )
 
     private fun values(project: Project, key: String): List<String> =
         FileBasedIndex.getInstance()

@@ -147,6 +147,9 @@ dependencies {
         rider(ProductVersion) { useInstaller.set(false) }
         jetbrainsRuntime()
         bundledPlugin("org.jetbrains.plugins.yaml")
+        bundledModule("intellij.rider.rdclient.dotnet")
+        plugin("com.github.catppuccin.jetbrains:3.6.1")
+        plugin("com.github.catppuccin.jetbrains_icons:1.13.2")
     }
 }
 

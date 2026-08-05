@@ -17,6 +17,8 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeRootsProvider" />
     <colorSettingsPage
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlColorSettingsPage" />
+    <colorProvider
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustColorProvider" />
     <fileBasedIndex
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustComponentNameIndex" />
     <fileBasedIndex
@@ -53,6 +55,8 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeSymbolContributor" />
     <platform.backend.documentation.targetProvider
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustSpriteDocumentationProvider" />
+    <platform.backend.documentation.targetProvider
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustTypeDocumentationProvider" />
     <psi.referenceContributor
         language="yaml"
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceContributor" />

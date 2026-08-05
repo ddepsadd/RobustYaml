@@ -127,6 +127,22 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
             return result
         }
 
+        fun findField(text: CharSequence, className: String, field: String): Int? {
+            val classes = CLASS.findAll(text).map { it.range.first to it }.toList()
+            if (classes.isEmpty()) return null
+            val scopes = classScopes(text, classes)
+
+            for (attribute in ATTRIBUTE.findAll(text)) {
+                if (ownerAt(scopes, classes, attribute.range.first) != className) continue
+                val name = SPECIAL_NAMES[attribute.groupValues[1]]
+                    ?: attribute.groups[2]?.value
+                    ?: fieldNameAfter(text, attribute.range.last)
+                    ?: continue
+                if (name == field) return attribute.range.first
+            }
+            return null
+        }
+
         fun parseBases(value: String): List<String> =
             value.substringBefore('|').split(',').filter { it.isNotEmpty() }
 
