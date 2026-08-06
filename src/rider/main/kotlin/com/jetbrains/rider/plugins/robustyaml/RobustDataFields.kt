@@ -50,6 +50,10 @@ object RobustDataFields {
         }
     }
 
+    fun rootClass(project: Project, declaration: RobustYamlContext.DeclarationContext): String? =
+        if (declaration.isComponent) componentClass(project, declaration.name)
+        else prototypeClass(project, declaration.name)
+
     fun componentClass(project: Project, component: String): String? =
         values(project, RobustDataFieldIndex.COMPONENT_KEY + component).firstOrNull()
 

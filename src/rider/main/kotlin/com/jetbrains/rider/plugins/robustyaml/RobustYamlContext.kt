@@ -35,6 +35,22 @@ object RobustYamlContext {
         return null
     }
 
+    fun pathTo(declaration: DeclarationContext, keyValue: YAMLKeyValue): List<String>? =
+        pathAt(declaration, keyValue)
+
+    fun pathAt(declaration: DeclarationContext, element: PsiElement): List<String>? {
+        val path = ArrayDeque<String>()
+        var child: PsiElement = element
+        var current: PsiElement? = element.parent
+        while (current != null) {
+            if (current === declaration.mapping) return path.toList()
+            if (current is YAMLKeyValue && current.value === child) path.addFirst(current.keyText)
+            child = current
+            current = current.parent
+        }
+        return null
+    }
+
     fun isPrototypeIdDeclaration(keyValue: YAMLKeyValue): Boolean =
         keyValue.keyText == "id" &&
             PsiTreeUtil.getParentOfType(keyValue, YAMLKeyValue::class.java, true) == null
@@ -57,7 +73,7 @@ object RobustYamlContext {
         return !isPrototypeIdDeclaration(keyValue)
     }
 
-    private fun owningKey(scalar: YAMLScalar): YAMLKeyValue? =
+    fun owningKey(scalar: YAMLScalar): YAMLKeyValue? =
         when (val parent = scalar.parent) {
             is YAMLKeyValue -> parent.takeIf { it.value === scalar }
             is YAMLSequenceItem -> PsiTreeUtil.getParentOfType(parent, YAMLKeyValue::class.java, true)

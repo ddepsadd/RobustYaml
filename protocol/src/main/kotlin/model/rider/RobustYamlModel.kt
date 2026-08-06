@@ -15,6 +15,8 @@ object RobustYamlModel : Ext(SolutionModel.Solution) {
         field("type", PredefinedType.string)
         field("summary", PredefinedType.string.nullable)
         field("prototypeKind", PredefinedType.string.nullable)
+        field("keyPrototypeKind", PredefinedType.string.nullable)
+        field("dictionary", PredefinedType.bool)
     }
 
     private val RobustFieldQuery = structdef {
@@ -22,7 +24,12 @@ object RobustYamlModel : Ext(SolutionModel.Solution) {
         field("path", immutableList(PredefinedType.string))
     }
 
+    private val RobustFieldsReply = structdef {
+        field("resolved", PredefinedType.bool)
+        field("fields", immutableList(RobustDataField))
+    }
+
     init {
-        call("typeFields", RobustFieldQuery, immutableList(RobustDataField))
+        call("typeFields", RobustFieldQuery, RobustFieldsReply)
     }
 }

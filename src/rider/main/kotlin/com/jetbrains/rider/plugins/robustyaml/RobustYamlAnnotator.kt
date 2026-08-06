@@ -17,6 +17,7 @@ class RobustYamlAnnotator : Annotator {
                 if (!inspectionsRun(element)) {
                     reportUnknownField(element, holder)
                     reportDuplicateId(element, holder)
+                    reportPrototypeIdValues(element, holder)
                 }
             }
             is YAMLScalar -> {
@@ -44,6 +45,17 @@ class RobustYamlAnnotator : Annotator {
         holder.newAnnotation(HighlightSeverity.ERROR, message)
             .range(keyValue.value ?: keyValue)
             .create()
+    }
+
+    private fun reportPrototypeIdValues(keyValue: YAMLKeyValue, holder: AnnotationHolder) {
+        for (problem in RobustValidation.prototypeIdValues(keyValue)) {
+            var builder = holder.newAnnotation(HighlightSeverity.ERROR, problem.message)
+                .range(problem.element)
+            for (suggestion in problem.suggestions) {
+                builder = builder.withFix(ChangePrototypeIdFix(problem.element, suggestion))
+            }
+            builder.create()
+        }
     }
 
     private fun reportUnknownPrototypeId(scalar: YAMLScalar, holder: AnnotationHolder) {

@@ -29,13 +29,19 @@ object RobustResources {
             value.substringAfterLast('.', "").lowercase() in KNOWN_EXTENSIONS
     }
 
+    fun resourceRoots(base: VirtualFile): List<VirtualFile> {
+        val roots = mutableListOf<VirtualFile>()
+        base.findChild(RESOURCES_DIR)?.let { roots += it }
+        base.children.filter { it.isDirectory }
+            .mapNotNullTo(roots) { it.findChild(RESOURCES_DIR) }
+        return roots.filter { it.isValid && it.isDirectory }.distinct()
+    }
+
     private fun collectRoots(project: Project): List<VirtualFile> {
         val base = project.guessProjectDir() ?: return emptyList()
         val roots = mutableListOf<VirtualFile>()
         RobustPrototypeRootsProvider.findPrototypeRoots(project).mapNotNullTo(roots) { it.parent }
-        base.findChild(RESOURCES_DIR)?.let { roots += it }
-        base.children.filter { it.isDirectory }
-            .mapNotNullTo(roots) { it.findChild(RESOURCES_DIR) }
+        roots += resourceRoots(base)
         return roots.filter { it.isValid && it.isDirectory }.distinct()
     }
 

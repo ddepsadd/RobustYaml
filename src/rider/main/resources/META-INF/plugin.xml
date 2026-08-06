@@ -26,6 +26,8 @@
     <fileBasedIndex
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeIdIndex" />
     <fileBasedIndex
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeIdsByKindIndex" />
+    <fileBasedIndex
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustDataFieldIndex" />
     <localInspection
         language="yaml"
@@ -62,6 +64,7 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceContributor" />
     <completion.contributor
         language="yaml"
+        order="first"
         implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustComponentCompletionContributor" />
     <projectConfigurable
         id="com.jetbrains.rider.plugins.robustyaml.settings"

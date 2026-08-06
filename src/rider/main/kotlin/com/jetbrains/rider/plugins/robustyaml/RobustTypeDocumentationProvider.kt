@@ -33,31 +33,14 @@ class RobustTypeDocumentationProvider : DocumentationTargetProvider {
         if (field.isEmpty()) return emptyList()
 
         val declaration = RobustYamlContext.declarationAround(keyValue) ?: return emptyList()
-        val path = pathTo(declaration, keyValue) ?: return emptyList()
+        val path = RobustYamlContext.pathTo(declaration, keyValue) ?: return emptyList()
 
         val project = keyValue.project
-        val root =
-            if (declaration.isComponent) RobustDataFields.componentClass(project, declaration.name)
-            else RobustDataFields.prototypeClass(project, declaration.name)
-        root ?: return emptyList()
+        val root = RobustDataFields.rootClass(project, declaration) ?: return emptyList()
 
         val owner = if (path.isEmpty()) RobustDataFields.ownerOfField(project, root, field) else null
         if (path.isEmpty() && owner == null) return emptyList()
         return listOf(FieldDocumentationTarget(project, owner, field, root, path))
-    }
-
-    private fun pathTo(
-        declaration: RobustYamlContext.DeclarationContext,
-        keyValue: YAMLKeyValue,
-    ): List<String>? {
-        val path = ArrayDeque<String>()
-        var mapping = keyValue.parentMapping ?: return null
-        while (mapping !== declaration.mapping) {
-            val owner = PsiTreeUtil.getParentOfType(mapping, YAMLKeyValue::class.java, true) ?: return null
-            path.addFirst(owner.keyText)
-            mapping = owner.parentMapping ?: return null
-        }
-        return path.toList()
     }
 
     private fun typeTargets(file: PsiFile, offset: Int): List<DocumentationTarget> {
@@ -109,7 +92,8 @@ private class FieldDocumentationTarget(
     override fun computeDocumentation(): DocumentationResult =
         DocumentationResult.asyncDocumentation {
             val declared = RobustBackend.getInstance(project).field(root, path, field)
-            val summary = owner?.let { smartReadAction(project) { summary(it) } }
+            val summary = declared?.summary?.let { RobustXmlDoc.html(it) }
+                ?: owner?.let { smartReadAction(project) { summary(it) } }
             if (declared == null && summary == null) return@asyncDocumentation null
 
             val html = buildString {

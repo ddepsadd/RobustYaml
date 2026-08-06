@@ -3,13 +3,17 @@ package com.jetbrains.rider.plugins.robustyaml
 import com.intellij.icons.AllIcons
 import com.intellij.navigation.ItemPresentation
 import com.intellij.openapi.application.WriteAction
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.roots.AdditionalLibraryRootsListener
 import com.intellij.openapi.roots.AdditionalLibraryRootsProvider
+import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.roots.SyntheticLibrary
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.psi.util.CachedValueProvider
+import com.intellij.psi.util.CachedValuesManager
 import java.nio.file.Path
 import javax.swing.Icon
 
@@ -37,12 +41,30 @@ class RobustPrototypeRootsProvider : AdditionalLibraryRootsProvider() {
     companion object {
         private const val LIBRARY_NAME = "Robust Prototypes"
 
-        fun findPrototypeRoots(project: Project): List<VirtualFile> {
-            val base = project.guessProjectDir() ?: return emptyList()
+        private val logger = logger<RobustPrototypeRootsProvider>()
+
+        fun findPrototypeRoots(project: Project): List<VirtualFile> =
+            CachedValuesManager.getManager(project).getCachedValue(project) {
+                CachedValueProvider.Result.create(
+                    computeRoots(project),
+                    VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS,
+                    ProjectRootManager.getInstance(project),
+                    RobustYamlSettings.getInstance(project).state,
+                )
+            }
+
+        private fun computeRoots(project: Project): List<VirtualFile> {
+            val base = project.guessProjectDir()
+            if (base == null) {
+                logger.info("No project dir, no prototype roots")
+                return emptyList()
+            }
             val settings = RobustYamlSettings.getInstance(project).state
             val detected = if (settings.autoDetect) autoDetect(base) else emptyList()
             val custom = settings.customRoots.mapNotNull { resolve(base, it) }
-            return (detected + custom).filter { it.isValid && it.isDirectory }.distinct()
+            val roots = (detected + custom).filter { it.isValid && it.isDirectory }.distinct()
+            logger.info("Prototype roots under ${base.path}: ${roots.joinToString { it.path }}")
+            return roots
         }
 
         fun rootsChanged(project: Project, oldRoots: Collection<VirtualFile>) {
@@ -58,12 +80,14 @@ class RobustPrototypeRootsProvider : AdditionalLibraryRootsProvider() {
         }
 
         private const val MAX_SCANNED_ENTRIES = 5000
+        private const val PROTOTYPES_SUFFIX = "Prototypes"
 
         private fun autoDetect(base: VirtualFile): List<VirtualFile> =
-            base.children
-                .filter { it.isDirectory }
-                .mapNotNull { it.findChild("Prototypes") }
-                .filter { it.isDirectory && containsYaml(it) }
+            (listOf(base) + base.children.filter { it.isDirectory } + RobustResources.resourceRoots(base))
+                .distinct()
+                .flatMap { it.children.asSequence().filter { child -> child.isDirectory } }
+                .filter { it.name.endsWith(PROTOTYPES_SUFFIX, ignoreCase = true) && containsYaml(it) }
+                .distinct()
 
         private fun containsYaml(dir: VirtualFile): Boolean {
             val queue = ArrayDeque(listOf(dir))

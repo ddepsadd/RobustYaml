@@ -42,14 +42,14 @@ namespace JetBrains.Rider.Model
   {
     //fields
     //public fields
-    [NotNull] public IRdEndpoint<RobustFieldQuery, List<RobustDataField>> TypeFields => _TypeFields;
+    [NotNull] public IRdEndpoint<RobustFieldQuery, RobustFieldsReply> TypeFields => _TypeFields;
     
     //private fields
-    [NotNull] private readonly RdCall<RobustFieldQuery, List<RobustDataField>> _TypeFields;
+    [NotNull] private readonly RdCall<RobustFieldQuery, RobustFieldsReply> _TypeFields;
     
     //primary constructor
     private RobustYamlModel(
-      [NotNull] RdCall<RobustFieldQuery, List<RobustDataField>> typeFields
+      [NotNull] RdCall<RobustFieldQuery, RobustFieldsReply> typeFields
     )
     {
       if (typeFields == null) throw new ArgumentNullException("typeFields");
@@ -60,16 +60,14 @@ namespace JetBrains.Rider.Model
     //secondary constructor
     internal RobustYamlModel (
     ) : this (
-      new RdCall<RobustFieldQuery, List<RobustDataField>>(RobustFieldQuery.Read, RobustFieldQuery.Write, ReadRobustDataFieldList, WriteRobustDataFieldList)
+      new RdCall<RobustFieldQuery, RobustFieldsReply>(RobustFieldQuery.Read, RobustFieldQuery.Write, RobustFieldsReply.Read, RobustFieldsReply.Write)
     ) {}
     //deconstruct trait
     //statics
     
-    public static CtxReadDelegate<List<RobustDataField>> ReadRobustDataFieldList = RobustDataField.Read.List();
     
-    public static  CtxWriteDelegate<List<RobustDataField>> WriteRobustDataFieldList = RobustDataField.Write.List();
     
-    protected override long SerializationHash => -5474492741890904948L;
+    protected override long SerializationHash => 8304899690730497698L;
     
     protected override Action<ISerializers> Register => RegisterDeclaredTypesSerializers;
     public static void RegisterDeclaredTypesSerializers(ISerializers serializers)
@@ -122,6 +120,8 @@ namespace JetBrains.Rider.Model
     [NotNull] public string Type {get; private set;}
     [CanBeNull] public string Summary {get; private set;}
     [CanBeNull] public string PrototypeKind {get; private set;}
+    [CanBeNull] public string KeyPrototypeKind {get; private set;}
+    public bool Dictionary {get; private set;}
     
     //private fields
     //primary constructor
@@ -129,7 +129,9 @@ namespace JetBrains.Rider.Model
       [NotNull] string name,
       [NotNull] string type,
       [CanBeNull] string summary,
-      [CanBeNull] string prototypeKind
+      [CanBeNull] string prototypeKind,
+      [CanBeNull] string keyPrototypeKind,
+      bool dictionary
     )
     {
       if (name == null) throw new ArgumentNullException("name");
@@ -139,15 +141,19 @@ namespace JetBrains.Rider.Model
       Type = type;
       Summary = summary;
       PrototypeKind = prototypeKind;
+      KeyPrototypeKind = keyPrototypeKind;
+      Dictionary = dictionary;
     }
     //secondary constructor
     //deconstruct trait
-    public void Deconstruct([NotNull] out string name, [NotNull] out string type, [CanBeNull] out string summary, [CanBeNull] out string prototypeKind)
+    public void Deconstruct([NotNull] out string name, [NotNull] out string type, [CanBeNull] out string summary, [CanBeNull] out string prototypeKind, [CanBeNull] out string keyPrototypeKind, out bool dictionary)
     {
       name = Name;
       type = Type;
       summary = Summary;
       prototypeKind = PrototypeKind;
+      keyPrototypeKind = KeyPrototypeKind;
+      dictionary = Dictionary;
     }
     //statics
     
@@ -157,7 +163,9 @@ namespace JetBrains.Rider.Model
       var type = reader.ReadString();
       var summary = ReadStringNullable(ctx, reader);
       var prototypeKind = ReadStringNullable(ctx, reader);
-      var _result = new RobustDataField(name, type, summary, prototypeKind);
+      var keyPrototypeKind = ReadStringNullable(ctx, reader);
+      var dictionary = reader.ReadBool();
+      var _result = new RobustDataField(name, type, summary, prototypeKind, keyPrototypeKind, dictionary);
       return _result;
     };
     public static CtxReadDelegate<string> ReadStringNullable = JetBrains.Rd.Impl.Serializers.ReadString.NullableClass();
@@ -168,6 +176,8 @@ namespace JetBrains.Rider.Model
       writer.Write(value.Type);
       WriteStringNullable(ctx, writer, value.Summary);
       WriteStringNullable(ctx, writer, value.PrototypeKind);
+      WriteStringNullable(ctx, writer, value.KeyPrototypeKind);
+      writer.Write(value.Dictionary);
     };
     public static  CtxWriteDelegate<string> WriteStringNullable = JetBrains.Rd.Impl.Serializers.WriteString.NullableClass();
     
@@ -187,7 +197,7 @@ namespace JetBrains.Rider.Model
     {
       if (ReferenceEquals(null, other)) return false;
       if (ReferenceEquals(this, other)) return true;
-      return Name == other.Name && Type == other.Type && Equals(Summary, other.Summary) && Equals(PrototypeKind, other.PrototypeKind);
+      return Name == other.Name && Type == other.Type && Equals(Summary, other.Summary) && Equals(PrototypeKind, other.PrototypeKind) && Equals(KeyPrototypeKind, other.KeyPrototypeKind) && Dictionary == other.Dictionary;
     }
     //hash code trait
     public override int GetHashCode()
@@ -198,6 +208,8 @@ namespace JetBrains.Rider.Model
         hash = hash * 31 + Type.GetHashCode();
         hash = hash * 31 + (Summary != null ? Summary.GetHashCode() : 0);
         hash = hash * 31 + (PrototypeKind != null ? PrototypeKind.GetHashCode() : 0);
+        hash = hash * 31 + (KeyPrototypeKind != null ? KeyPrototypeKind.GetHashCode() : 0);
+        hash = hash * 31 + Dictionary.GetHashCode();
         return hash;
       }
     }
@@ -210,6 +222,8 @@ namespace JetBrains.Rider.Model
         printer.Print("type = "); Type.PrintEx(printer); printer.Println();
         printer.Print("summary = "); Summary.PrintEx(printer); printer.Println();
         printer.Print("prototypeKind = "); PrototypeKind.PrintEx(printer); printer.Println();
+        printer.Print("keyPrototypeKind = "); KeyPrototypeKind.PrintEx(printer); printer.Println();
+        printer.Print("dictionary = "); Dictionary.PrintEx(printer); printer.Println();
       }
       printer.Print(")");
     }
@@ -224,7 +238,7 @@ namespace JetBrains.Rider.Model
   
   
   /// <summary>
-  /// <p>Generated from: RobustYamlModel.kt:20</p>
+  /// <p>Generated from: RobustYamlModel.kt:22</p>
   /// </summary>
   public sealed class RobustFieldQuery : IPrintable, IEquatable<RobustFieldQuery>
   {
@@ -306,6 +320,101 @@ namespace JetBrains.Rider.Model
       using (printer.IndentCookie()) {
         printer.Print("className = "); ClassName.PrintEx(printer); printer.Println();
         printer.Print("path = "); Path.PrintEx(printer); printer.Println();
+      }
+      printer.Print(")");
+    }
+    //toString
+    public override string ToString()
+    {
+      var printer = new SingleLinePrettyPrinter();
+      Print(printer);
+      return printer.ToString();
+    }
+  }
+  
+  
+  /// <summary>
+  /// <p>Generated from: RobustYamlModel.kt:27</p>
+  /// </summary>
+  public sealed class RobustFieldsReply : IPrintable, IEquatable<RobustFieldsReply>
+  {
+    //fields
+    //public fields
+    public bool Resolved {get; private set;}
+    [NotNull] public List<RobustDataField> Fields {get; private set;}
+    
+    //private fields
+    //primary constructor
+    public RobustFieldsReply(
+      bool resolved,
+      [NotNull] List<RobustDataField> fields
+    )
+    {
+      if (fields == null) throw new ArgumentNullException("fields");
+      
+      Resolved = resolved;
+      Fields = fields;
+    }
+    //secondary constructor
+    //deconstruct trait
+    public void Deconstruct(out bool resolved, [NotNull] out List<RobustDataField> fields)
+    {
+      resolved = Resolved;
+      fields = Fields;
+    }
+    //statics
+    
+    public static CtxReadDelegate<RobustFieldsReply> Read = (ctx, reader) => 
+    {
+      var resolved = reader.ReadBool();
+      var fields = ReadRobustDataFieldList(ctx, reader);
+      var _result = new RobustFieldsReply(resolved, fields);
+      return _result;
+    };
+    public static CtxReadDelegate<List<RobustDataField>> ReadRobustDataFieldList = RobustDataField.Read.List();
+    
+    public static CtxWriteDelegate<RobustFieldsReply> Write = (ctx, writer, value) => 
+    {
+      writer.Write(value.Resolved);
+      WriteRobustDataFieldList(ctx, writer, value.Fields);
+    };
+    public static  CtxWriteDelegate<List<RobustDataField>> WriteRobustDataFieldList = RobustDataField.Write.List();
+    
+    //constants
+    
+    //custom body
+    //methods
+    //equals trait
+    public override bool Equals(object obj)
+    {
+      if (ReferenceEquals(null, obj)) return false;
+      if (ReferenceEquals(this, obj)) return true;
+      if (obj.GetType() != GetType()) return false;
+      return Equals((RobustFieldsReply) obj);
+    }
+    public bool Equals(RobustFieldsReply other)
+    {
+      if (ReferenceEquals(null, other)) return false;
+      if (ReferenceEquals(this, other)) return true;
+      return Resolved == other.Resolved && Fields.SequenceEqual(other.Fields);
+    }
+    //hash code trait
+    public override int GetHashCode()
+    {
+      unchecked {
+        var hash = 0;
+        hash = hash * 31 + Resolved.GetHashCode();
+        hash = hash * 31 + Fields.ContentHashCode();
+        return hash;
+      }
+    }
+    //pretty print
+    public void Print(PrettyPrinter printer)
+    {
+      printer.Println("RobustFieldsReply (");
+      using (printer.IndentCookie()) {
+        printer.Print("resolved = "); Resolved.PrintEx(printer); printer.Println();
+        printer.Print("fields = "); Fields.PrintEx(printer); printer.Println();
       }
       printer.Print(")");
     }

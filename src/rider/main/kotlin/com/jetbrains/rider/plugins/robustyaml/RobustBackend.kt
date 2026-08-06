@@ -1,5 +1,6 @@
 package com.jetbrains.rider.plugins.robustyaml
 
+import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
@@ -10,36 +11,66 @@ import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.jetbrains.rd.framework.util.asCoroutineDispatcher
 import com.jetbrains.rd.ide.model.RobustDataField
 import com.jetbrains.rd.ide.model.RobustFieldQuery
+import com.jetbrains.rd.ide.model.RobustFieldsReply
 import com.jetbrains.rd.ide.model.robustYamlModel
 import com.jetbrains.rider.projectView.hasSolution
 import com.jetbrains.rider.projectView.solution
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 @Service(Service.Level.PROJECT)
 class RobustBackend(private val project: Project, private val scope: CoroutineScope) {
     private val cache = ConcurrentHashMap<String, Deferred<List<RobustDataField>>>()
+    private val ready = ConcurrentHashMap<String, List<RobustDataField>>()
+    private val restartPending = AtomicBoolean(false)
 
     init {
         project.messageBus.connect(scope).subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener {
             override fun after(events: List<VFileEvent>) {
                 if (events.none { it.path.endsWith(".cs") }) return
                 cache.clear()
+                ready.clear()
             }
         })
     }
 
     suspend fun typeFields(className: String, path: List<String> = emptyList()): List<RobustDataField> {
         if (!project.hasSolution) return emptyList()
-        val key = (listOf(className) + path).joinToString("/")
+        val key = keyOf(className, path)
         return cache.computeIfAbsent(key) { load(it, className, path) }.await()
     }
 
     suspend fun field(className: String, path: List<String>, field: String): RobustDataField? =
         typeFields(className, path).firstOrNull { it.name == field }
+
+    fun cachedFields(className: String, path: List<String> = emptyList()): List<RobustDataField>? {
+        if (!project.hasSolution) return null
+        val key = keyOf(className, path)
+        ready[key]?.let { return it }
+        cache.computeIfAbsent(key) { load(it, className, path) }
+        return null
+    }
+
+    fun cachedField(className: String, path: List<String>, field: String): RobustDataField? =
+        cachedFields(className, path)?.firstOrNull { it.name == field }
+
+    private fun keyOf(className: String, path: List<String>): String =
+        (listOf(className) + path).joinToString("/")
+
+    private fun scheduleRestart() {
+        if (!restartPending.compareAndSet(false, true)) return
+        scope.launch {
+            delay(RESTART_DELAY)
+            restartPending.set(false)
+            DaemonCodeAnalyzer.getInstance(project).restart()
+        }
+    }
 
     private fun load(
         key: String,
@@ -49,19 +80,33 @@ class RobustBackend(private val project: Project, private val scope: CoroutineSc
         runCatching {
             val model = project.solution.robustYamlModel
             val scheduler = model.protocol?.scheduler
-                ?: return@runCatching emptyList<RobustDataField>()
+                ?: return@runCatching RobustFieldsReply(false, emptyList())
             withContext(scheduler.asCoroutineDispatcher) {
                 model.typeFields.startSuspending(RobustFieldQuery(className, path))
             }
-        }.onSuccess {
-            logger.info("Backend returned ${it.size} fields for '$key'")
+        }.onSuccess { reply ->
+            val kinds = reply.fields.mapNotNull { field ->
+                val kind = field.prototypeKind ?: field.keyPrototypeKind ?: return@mapNotNull null
+                "${field.name}=$kind"
+            }.joinToString()
+            val docs = reply.fields.count { it.summary != null }
+            val state = if (reply.resolved) "resolved" else "unbuilt"
+            logger.info("Backend returned ${reply.fields.size} fields ($docs documented, $state) for '$key' [$kinds]")
+            if (!reply.resolved) {
+                cache.remove(key)
+            } else {
+                ready[key] = reply.fields
+                if (reply.fields.isNotEmpty()) scheduleRestart()
+            }
         }.onFailure {
             logger.info("Backend call failed for '$key'", it)
             cache.remove(key)
-        }.getOrDefault(emptyList())
+        }.map { it.fields }.getOrDefault(emptyList())
     }
 
     companion object {
+        private const val RESTART_DELAY = 300L
+
         private val logger = logger<RobustBackend>()
 
         fun getInstance(project: Project): RobustBackend = project.service()

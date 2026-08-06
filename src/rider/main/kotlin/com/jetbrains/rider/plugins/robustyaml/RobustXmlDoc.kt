@@ -33,8 +33,10 @@ object RobustXmlDoc {
     fun summaryAt(text: CharSequence, offset: Int): String? {
         val doc = docAbove(text.subSequence(0, offset)) ?: return null
         val summary = SUMMARY.find(doc)?.groupValues?.get(1) ?: return null
-        return toHtml(summary).takeIf { it.isNotEmpty() }
+        return html(summary)
     }
+
+    fun html(summary: String): String? = toHtml(summary).takeIf { it.isNotEmpty() }
 
     private fun docAbove(prefix: CharSequence): String? {
         val lines = prefix.toString().lines()

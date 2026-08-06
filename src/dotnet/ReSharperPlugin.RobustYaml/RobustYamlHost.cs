@@ -38,9 +38,16 @@ namespace ReSharperPlugin.RobustYaml
             public IType Type;
             public ITypeMember Member;
             public string PrototypeKind;
+            public string KeyPrototypeKind;
         }
 
-        private List<RobustDataField> Fields(string className, List<string> path)
+        private struct Kinds
+        {
+            public string Key;
+            public string Value;
+        }
+
+        private RobustFieldsReply Fields(string className, List<string> path)
         {
             using (ReadLockCookie.Create())
             {
@@ -58,16 +65,16 @@ namespace ReSharperPlugin.RobustYaml
 
                 foreach (var candidate in candidates)
                 {
-                    var fields = FieldsOf(candidate, services, path);
-                    if (fields.Count > 0)
-                        return fields;
+                    var reply = FieldsOf(candidate, services, path);
+                    if (!reply.Resolved || reply.Fields.Count > 0)
+                        return reply;
                 }
-            }
 
-            return new List<RobustDataField>();
+                return new RobustFieldsReply(candidates.Count > 0, new List<RobustDataField>());
+            }
         }
 
-        private List<RobustDataField> FieldsOf(ITypeElement found, IPsiServices services, List<string> path)
+        private RobustFieldsReply FieldsOf(ITypeElement found, IPsiServices services, List<string> path)
         {
             var result = new List<RobustDataField>();
 
@@ -79,26 +86,59 @@ namespace ReSharperPlugin.RobustYaml
                 var scope = services.Symbols.GetSymbolScope(found.Module, true, true);
                 var type = scope.GetTypeElementByCLRName(found.GetClrName()) ?? found;
 
+                var keySegment = false;
                 foreach (var segment in path)
                 {
+                    if (keySegment)
+                    {
+                        keySegment = false;
+                        continue;
+                    }
+
                     var step = Collect(type).FirstOrDefault(it => it.Name == segment);
                     if (step == null)
-                        return result;
+                        return Resolved(result);
 
+                    if (step.Type.GetPresentableName(type.PresentationLanguage).Contains(Unresolved))
+                        return Unbuilt;
+
+                    keySegment = IsDictionary(step.Type, type.Module);
                     type = Unwrap(step.Type, type.Module);
                     if (type == null)
-                        return result;
+                        return Resolved(result);
                 }
 
                 foreach (var field in Collect(type))
+                {
+                    var presentable = field.Type.GetPresentableName(type.PresentationLanguage);
+                    if (presentable.Contains(Unresolved))
+                        return Unbuilt;
+
                     result.Add(new RobustDataField(
                         field.Name,
-                        field.Type.GetPresentableName(type.PresentationLanguage),
-                        field.Member.GetXMLDoc(true)?.Value,
-                        field.PrototypeKind));
+                        presentable,
+                        Summary(field.Member),
+                        field.PrototypeKind,
+                        field.KeyPrototypeKind,
+                        IsDictionary(field.Type, type.Module)));
+                }
             }
 
-            return result;
+            return Resolved(result);
+        }
+
+        private static RobustFieldsReply Resolved(List<RobustDataField> fields) =>
+            new RobustFieldsReply(true, fields);
+
+        private static RobustFieldsReply Unbuilt =>
+            new RobustFieldsReply(false, new List<RobustDataField>());
+
+        private static string Summary(ITypeMember member)
+        {
+            var node = member.GetXMLDescriptionSummary(true)
+                       ?? member.GetXMLDoc(true)?.SelectSingleNode("descendant-or-self::summary");
+            var xml = node?.InnerXml;
+            return string.IsNullOrWhiteSpace(xml) ? null : xml;
         }
 
         private IModuleReferenceResolveContext ResolveContext(IPsiModule module)
@@ -127,18 +167,20 @@ namespace ReSharperPlugin.RobustYaml
                 var type = current.Key;
                 var substitution = current.Value;
 
+                var isRecord = HasAttribute(type, DataRecordAttribute);
+
                 foreach (var member in type.GetMembers())
                 {
                     if (!(member is ITypeOwner owner))
                         continue;
 
                     var attribute = DataFieldAttribute(member);
-                    if (attribute == null)
+                    if (attribute == null && !(isRecord && IsRecordField(member)))
                         continue;
 
                     var memberType = substitution.Apply(owner.Type);
 
-                    if (WithoutSuffix(attribute.Name?.ShortName) == IncludeDataField)
+                    if (attribute != null && WithoutSuffix(attribute.Name?.ShortName) == IncludeDataField)
                     {
                         var included = memberType as IDeclaredType;
                         var element = included?.GetTypeElement();
@@ -148,16 +190,20 @@ namespace ReSharperPlugin.RobustYaml
                         continue;
                     }
 
-                    var name = ExplicitName(attribute) ?? Decapitalize(member.ShortName.TrimStart('_'));
+                    var name = FixedName(attribute)
+                               ?? ExplicitName(attribute)
+                               ?? Decapitalize(member.ShortName.TrimStart('_'));
                     if (!seen.Add(name))
                         continue;
 
+                    var kinds = PrototypeKinds(memberType, attribute, type.Module);
                     result.Add(new Field
                     {
                         Name = name,
                         Type = memberType,
                         Member = member,
-                        PrototypeKind = PrototypeKind(memberType, attribute, type.Module),
+                        PrototypeKind = kinds.Value,
+                        KeyPrototypeKind = kinds.Key,
                     });
                 }
 
@@ -179,7 +225,7 @@ namespace ReSharperPlugin.RobustYaml
         {
             for (var depth = 0; depth < MaxUnwrap; depth++)
             {
-                var declared = type as IDeclaredType;
+                var declared = type.Unlift() as IDeclaredType;
                 if (declared == null || declared.IsString())
                     return type;
 
@@ -204,16 +250,52 @@ namespace ReSharperPlugin.RobustYaml
             return type;
         }
 
+        private static bool IsDictionary(IType type, IPsiModule module)
+        {
+            var declared = type.Unlift() as IDeclaredType;
+            if (declared == null)
+                return false;
+
+            var values = CollectionTypeUtil.GetElementTypesForGenericType(
+                declared, module.GetPredefinedType().GenericIDictionary, 1);
+            return values != null && values.Count > 0;
+        }
+
         private static ITypeElement Unwrap(IType type, IPsiModule module)
         {
             var unwrapped = UnwrapType(type, module) as IDeclaredType;
             return unwrapped == null || unwrapped.IsString() ? null : unwrapped.GetTypeElement();
         }
 
-        private static string PrototypeKind(IType type, IAttribute attribute, IPsiModule module)
+        private static Kinds PrototypeKinds(IType type, IAttribute attribute, IPsiModule module)
         {
-            var target = SerializerArgument(attribute) ?? UnwrapType(type, module);
-            var declared = target as IDeclaredType;
+            var serializer = SerializerArgument(attribute) as IDeclaredType;
+            if (serializer != null)
+            {
+                var kind = KindOfPrototype(LastTypeArgument(serializer));
+                var name = serializer.GetTypeElement()?.ShortName ?? "";
+                return name.EndsWith(DictionarySerializer) && !name.EndsWith(ValueDictionarySerializer)
+                    ? new Kinds { Key = kind }
+                    : new Kinds { Value = kind };
+            }
+
+            var result = new Kinds { Value = KindOfType(UnwrapType(type, module)) };
+
+            var declared = type as IDeclaredType;
+            if (declared != null)
+            {
+                var keys = CollectionTypeUtil.GetElementTypesForGenericType(
+                    declared, module.GetPredefinedType().GenericIDictionary, 0);
+                if (keys != null && keys.Count > 0)
+                    result.Key = KindOfType(keys[0]);
+            }
+
+            return result;
+        }
+
+        private static string KindOfType(IType type)
+        {
+            var declared = type.Unlift() as IDeclaredType;
             var element = declared?.GetTypeElement();
             if (element == null)
                 return null;
@@ -221,59 +303,103 @@ namespace ReSharperPlugin.RobustYaml
             if (element.ShortName == EntProtoId)
                 return EntityKind;
 
-            if (element.ShortName == ProtoId || element.ShortName.EndsWith("Serializer"))
-            {
-                declared = FirstTypeArgument(declared) as IDeclaredType;
-                element = declared?.GetTypeElement();
-                if (element == null)
-                    return null;
-            }
+            if (element.ShortName == ProtoId)
+                return KindOfPrototype(LastTypeArgument(declared));
 
             return KindOf(element);
         }
 
+        private static string KindOfPrototype(IType type)
+        {
+            var element = (type as IDeclaredType)?.GetTypeElement();
+            return element == null ? null : KindOf(element);
+        }
+
+        private static bool IsRecordField(ITypeMember member) =>
+            !member.IsStatic
+            && member.GetAccessRights() == AccessRights.PUBLIC
+            && (member is IProperty || member is IField);
+
+        private static bool HasAttribute(ITypeElement type, string name) =>
+            FindAttribute(type.GetDeclarations(), it => it == name) != null
+            || type.GetAttributeInstances(AttributesSource.Self)
+                .Any(it => WithoutSuffix(it.GetAttributeShortName()) == name);
+
         private static IType SerializerArgument(IAttribute attribute)
         {
+            if (attribute == null)
+                return null;
+
             foreach (var argument in attribute.Arguments)
             {
-                if (argument.NameIdentifier?.Name != "customTypeSerializer")
-                    continue;
-
-                return (argument.Value as ITypeofExpression)?.ArgumentType;
+                var type = (argument.Value as ITypeofExpression)?.ArgumentType;
+                if (type != null)
+                    return type;
             }
 
             return null;
         }
 
-        private static IType FirstTypeArgument(IDeclaredType type)
+        private static string FixedName(IAttribute attribute)
+        {
+            if (attribute == null)
+                return null;
+
+            string name;
+            return FixedNames.TryGetValue(WithoutSuffix(attribute.Name?.ShortName) ?? "", out name) ? name : null;
+        }
+
+        private static IType LastTypeArgument(IDeclaredType type)
         {
             var element = type.GetTypeElement();
             if (element == null || element.TypeParametersCount == 0)
                 return null;
 
-            return type.GetSubstitution().Apply(element.TypeParameters[0]);
+            return type.GetSubstitution().Apply(element.TypeParameters[element.TypeParametersCount - 1]);
         }
 
         private static string KindOf(ITypeElement prototype)
         {
-            var declaration = prototype.GetDeclarations().OfType<IAttributesOwnerDeclaration>().FirstOrDefault();
-            var attribute = declaration?.Attributes
-                .FirstOrDefault(it => WithoutSuffix(it.Name?.ShortName) == PrototypeAttribute);
-            if (attribute == null)
+            var attribute = FindAttribute(prototype.GetDeclarations(), it => it == PrototypeAttribute);
+            if (attribute != null)
+                return ExplicitName(attribute) ?? KindFromName(prototype.ShortName);
+
+            var instance = prototype.GetAttributeInstances(AttributesSource.Self)
+                .FirstOrDefault(it => WithoutSuffix(it.GetAttributeShortName()) == PrototypeAttribute);
+            if (instance == null)
                 return null;
 
-            var explicitKind = ExplicitName(attribute);
-            if (explicitKind != null)
-                return explicitKind;
+            return MetadataName(instance) ?? KindFromName(prototype.ShortName);
+        }
 
-            var name = prototype.ShortName;
-            return name.EndsWith(PrototypeAttribute)
+        private static string MetadataName(IAttributeInstance instance)
+        {
+            try
+            {
+                foreach (var value in instance.PositionParameters())
+                {
+                    if (value.IsConstant && value.ConstantValue.StringValue != null)
+                        return value.ConstantValue.StringValue;
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+
+            return null;
+        }
+
+        private static string KindFromName(string name) =>
+            name.EndsWith(PrototypeAttribute)
                 ? Decapitalize(name.Substring(0, name.Length - PrototypeAttribute.Length))
                 : null;
-        }
 
         private static string ExplicitName(IAttribute attribute)
         {
+            if (attribute == null)
+                return null;
+
             var argument = attribute.Arguments.FirstOrDefault();
             if (argument == null || argument.NameIdentifier != null)
                 return null;
@@ -285,22 +411,42 @@ namespace ReSharperPlugin.RobustYaml
             return text.Substring(1, text.Length - 2);
         }
 
-        private static IAttribute DataFieldAttribute(ITypeMember member)
+        private static IAttribute DataFieldAttribute(ITypeMember member) =>
+            FindAttribute(member.GetDeclarations(), it => it != null && DataFieldAttributes.Contains(it));
+
+        private static IAttribute FindAttribute(IEnumerable<IDeclaration> declarations, Func<string, bool> match)
         {
-            var declaration = member.GetDeclarations()
-                .OfType<IAttributesOwnerDeclaration>()
-                .FirstOrDefault();
-            return declaration?.Attributes
-                .FirstOrDefault(it => DataFieldAttributes.Contains(WithoutSuffix(it.Name?.ShortName)));
+            foreach (var declaration in declarations.OfType<IAttributesOwnerDeclaration>())
+            {
+                foreach (var attribute in declaration.Attributes)
+                {
+                    if (match(WithoutSuffix(attribute.Name?.ShortName)))
+                        return attribute;
+                }
+            }
+
+            return null;
         }
 
         private const int MaxTypes = 32;
         private const int MaxUnwrap = 4;
         private const string IncludeDataField = "IncludeDataField";
+        private const string DataRecordAttribute = "DataRecord";
+        private const string Unresolved = "???";
         private const string PrototypeAttribute = "Prototype";
         private const string ProtoId = "ProtoId";
         private const string EntProtoId = "EntProtoId";
         private const string EntityKind = "entity";
+        private const string DictionarySerializer = "DictionarySerializer";
+        private const string ValueDictionarySerializer = "ValueDictionarySerializer";
+
+        private static readonly Dictionary<string, string> FixedNames =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                { "IdDataField", "id" },
+                { "ParentDataField", "parent" },
+                { "AbstractDataField", "abstract" },
+            };
 
         private static readonly HashSet<string> DataFieldAttributes = new HashSet<string>
         {

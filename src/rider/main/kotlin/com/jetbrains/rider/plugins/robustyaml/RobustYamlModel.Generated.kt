@@ -19,7 +19,7 @@ import kotlin.jvm.JvmStatic
  * #### Generated from [RobustYamlModel.kt:11]
  */
 class RobustYamlModel private constructor(
-    private val _typeFields: RdCall<RobustFieldQuery, List<RobustDataField>>
+    private val _typeFields: RdCall<RobustFieldQuery, RobustFieldsReply>
 ) : RdExtBase() {
     //companion
     
@@ -29,21 +29,21 @@ class RobustYamlModel private constructor(
             val classLoader = javaClass.classLoader
             serializers.register(LazyCompanionMarshaller(RdId(1879621150234290220), classLoader, "com.jetbrains.rd.ide.model.RobustDataField"))
             serializers.register(LazyCompanionMarshaller(RdId(2928082736417472178), classLoader, "com.jetbrains.rd.ide.model.RobustFieldQuery"))
+            serializers.register(LazyCompanionMarshaller(RdId(-1463155538665054867), classLoader, "com.jetbrains.rd.ide.model.RobustFieldsReply"))
         }
         
         
         
         
-        private val __RobustDataFieldListSerializer = RobustDataField.list()
         
-        const val serializationHash = -5474492741890904948L
+        const val serializationHash = 8304899690730497698L
         
     }
     override val serializersOwner: ISerializersOwner get() = RobustYamlModel
     override val serializationHash: Long get() = RobustYamlModel.serializationHash
     
     //fields
-    val typeFields: IRdCall<RobustFieldQuery, List<RobustDataField>> get() = _typeFields
+    val typeFields: IRdCall<RobustFieldQuery, RobustFieldsReply> get() = _typeFields
     //methods
     //initializer
     init {
@@ -53,7 +53,7 @@ class RobustYamlModel private constructor(
     //secondary constructor
     internal constructor(
     ) : this(
-        RdCall<RobustFieldQuery, List<RobustDataField>>(RobustFieldQuery, __RobustDataFieldListSerializer)
+        RdCall<RobustFieldQuery, RobustFieldsReply>(RobustFieldQuery, RobustFieldsReply)
     )
     
     //equals trait
@@ -87,7 +87,9 @@ data class RobustDataField (
     val name: String,
     val type: String,
     val summary: String?,
-    val prototypeKind: String?
+    val prototypeKind: String?,
+    val keyPrototypeKind: String?,
+    val dictionary: Boolean
 ) : IPrintable {
     //companion
     
@@ -101,7 +103,9 @@ data class RobustDataField (
             val type = buffer.readString()
             val summary = buffer.readNullable { buffer.readString() }
             val prototypeKind = buffer.readNullable { buffer.readString() }
-            return RobustDataField(name, type, summary, prototypeKind)
+            val keyPrototypeKind = buffer.readNullable { buffer.readString() }
+            val dictionary = buffer.readBool()
+            return RobustDataField(name, type, summary, prototypeKind, keyPrototypeKind, dictionary)
         }
         
         override fun write(ctx: SerializationCtx, buffer: AbstractBuffer, value: RobustDataField)  {
@@ -109,6 +113,8 @@ data class RobustDataField (
             buffer.writeString(value.type)
             buffer.writeNullable(value.summary) { buffer.writeString(it) }
             buffer.writeNullable(value.prototypeKind) { buffer.writeString(it) }
+            buffer.writeNullable(value.keyPrototypeKind) { buffer.writeString(it) }
+            buffer.writeBool(value.dictionary)
         }
         
         
@@ -128,6 +134,8 @@ data class RobustDataField (
         if (type != other.type) return false
         if (summary != other.summary) return false
         if (prototypeKind != other.prototypeKind) return false
+        if (keyPrototypeKind != other.keyPrototypeKind) return false
+        if (dictionary != other.dictionary) return false
         
         return true
     }
@@ -138,6 +146,8 @@ data class RobustDataField (
         __r = __r*31 + type.hashCode()
         __r = __r*31 + if (summary != null) summary.hashCode() else 0
         __r = __r*31 + if (prototypeKind != null) prototypeKind.hashCode() else 0
+        __r = __r*31 + if (keyPrototypeKind != null) keyPrototypeKind.hashCode() else 0
+        __r = __r*31 + dictionary.hashCode()
         return __r
     }
     //pretty print
@@ -148,6 +158,8 @@ data class RobustDataField (
             print("type = "); type.print(printer); println()
             print("summary = "); summary.print(printer); println()
             print("prototypeKind = "); prototypeKind.print(printer); println()
+            print("keyPrototypeKind = "); keyPrototypeKind.print(printer); println()
+            print("dictionary = "); dictionary.print(printer); println()
         }
         printer.print(")")
     }
@@ -158,7 +170,7 @@ data class RobustDataField (
 
 
 /**
- * #### Generated from [RobustYamlModel.kt:20]
+ * #### Generated from [RobustYamlModel.kt:22]
  */
 data class RobustFieldQuery (
     val className: String,
@@ -213,6 +225,71 @@ data class RobustFieldQuery (
         printer.indent {
             print("className = "); className.print(printer); println()
             print("path = "); path.print(printer); println()
+        }
+        printer.print(")")
+    }
+    //deepClone
+    //contexts
+    //threading
+}
+
+
+/**
+ * #### Generated from [RobustYamlModel.kt:27]
+ */
+data class RobustFieldsReply (
+    val resolved: Boolean,
+    val fields: List<RobustDataField>
+) : IPrintable {
+    //companion
+    
+    companion object : IMarshaller<RobustFieldsReply> {
+        override val _type: KClass<RobustFieldsReply> = RobustFieldsReply::class
+        override val id: RdId get() = RdId(-1463155538665054867)
+        
+        @Suppress("UNCHECKED_CAST")
+        override fun read(ctx: SerializationCtx, buffer: AbstractBuffer): RobustFieldsReply  {
+            val resolved = buffer.readBool()
+            val fields = buffer.readList { RobustDataField.read(ctx, buffer) }
+            return RobustFieldsReply(resolved, fields)
+        }
+        
+        override fun write(ctx: SerializationCtx, buffer: AbstractBuffer, value: RobustFieldsReply)  {
+            buffer.writeBool(value.resolved)
+            buffer.writeList(value.fields) { v -> RobustDataField.write(ctx, buffer, v) }
+        }
+        
+        
+    }
+    //fields
+    //methods
+    //initializer
+    //secondary constructor
+    //equals trait
+    override fun equals(other: Any?): Boolean  {
+        if (this === other) return true
+        if (other == null || other::class != this::class) return false
+        
+        other as RobustFieldsReply
+        
+        if (resolved != other.resolved) return false
+        if (fields != other.fields) return false
+        
+        return true
+    }
+    //hash code trait
+    override fun hashCode(): Int  {
+        var __r = 0
+        __r = __r*31 + resolved.hashCode()
+        __r = __r*31 + fields.hashCode()
+        return __r
+    }
+    //pretty print
+    override fun print(printer: PrettyPrinter)  {
+        printer.println("RobustFieldsReply (")
+        printer.indent {
+            print("resolved = "); resolved.print(printer); println()
+            print("fields = "); fields.print(printer); println()
         }
         printer.print(")")
     }

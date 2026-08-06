@@ -11,6 +11,7 @@ import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.util.indexing.FileBasedIndex
 import org.jetbrains.yaml.psi.YAMLKeyValue
+import java.util.concurrent.ConcurrentHashMap
 
 object RobustPrototypeIndex {
     fun kinds(project: Project): List<String> =
@@ -62,6 +63,35 @@ object RobustPrototypeIndex {
                 VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS,
             )
         }
+
+    fun idsOfKind(project: Project, kind: String): List<String> {
+        if (kind.isEmpty()) return emptyList()
+        return idsByKind(project).getOrPut(kind) { collectIdsOfKind(project, kind) }
+    }
+
+    private fun idsByKind(project: Project): ConcurrentHashMap<String, List<String>> =
+        CachedValuesManager.getManager(project).getCachedValue(project) {
+            CachedValueProvider.Result.create(
+                ConcurrentHashMap<String, List<String>>(),
+                VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS,
+            )
+        }
+
+    private fun collectIdsOfKind(project: Project, kind: String): List<String> {
+        val ids = sortedSetOf<String>()
+        FileBasedIndex.getInstance().processValues(
+            RobustPrototypeIdsByKindIndex.NAME,
+            kind,
+            null,
+            { _, value ->
+                value.split(RobustPrototypeIdsByKindIndex.ID_SEPARATOR)
+                    .filterTo(ids) { it.isNotEmpty() }
+                true
+            },
+            prototypeScope(project),
+        )
+        return ids.toList()
+    }
 
     fun findDeclarations(project: Project, id: String): List<YAMLKeyValue> {
         if (id.isEmpty()) return emptyList()
