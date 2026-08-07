@@ -1,11 +1,16 @@
 package com.jetbrains.rider.plugins.robustyaml
 
+import com.intellij.codeInsight.AutoPopupController
 import com.intellij.codeInsight.completion.CompletionContributor
 import com.intellij.codeInsight.completion.CompletionParameters
 import com.intellij.codeInsight.completion.CompletionProvider
 import com.intellij.codeInsight.completion.CompletionResultSet
 import com.intellij.codeInsight.completion.CompletionType
+import com.intellij.codeInsight.completion.InsertHandler
+import com.intellij.codeInsight.completion.InsertionContext
+import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
+import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.patterns.PlatformPatterns
@@ -18,11 +23,39 @@ import org.jetbrains.yaml.psi.YAMLScalar
 
 private val logger = logger<RobustComponentCompletionContributor>()
 
+private class KeyInsertHandler(private val popup: Boolean) : InsertHandler<LookupElement> {
+    override fun handleInsert(context: InsertionContext, item: LookupElement) {
+        val document = context.document
+        val offset = context.tailOffset
+        val lineEnd = document.getLineEndOffset(document.getLineNumber(offset))
+        if (document.charsSequence.subSequence(offset, lineEnd).contains(':')) return
+
+        document.insertString(offset, ": ")
+        context.setTailOffset(offset + 2)
+        context.editor.caretModel.moveToOffset(offset + 2)
+        context.commitDocument()
+        if (popup) AutoPopupController.getInstance(context.project).scheduleAutoPopup(context.editor)
+    }
+
+    companion object {
+        val PLAIN = KeyInsertHandler(false)
+        val WITH_POPUP = KeyInsertHandler(true)
+    }
+}
+
+private fun atKeyPosition(parameters: CompletionParameters): Boolean {
+    val document = parameters.editor.document
+    val offset = parameters.offset
+    val lineStart = document.getLineStartOffset(document.getLineNumber(offset))
+    return !document.charsSequence.subSequence(lineStart, offset).contains(':')
+}
+
 class RobustComponentCompletionContributor : CompletionContributor() {
     init {
         extend(CompletionType.BASIC, PlatformPatterns.psiElement(), ComponentNameProvider)
         extend(CompletionType.BASIC, PlatformPatterns.psiElement(), PrototypeKindProvider)
         extend(CompletionType.BASIC, PlatformPatterns.psiElement(), PrototypeIdProvider)
+        extend(CompletionType.BASIC, PlatformPatterns.psiElement(), EnumValueProvider)
         extend(CompletionType.BASIC, PlatformPatterns.psiElement(), DataFieldProvider)
     }
 }
@@ -41,18 +74,26 @@ private object DataFieldProvider : CompletionProvider<CompletionParameters>() {
         val path = RobustYamlContext.pathAt(declaration, position) ?: return
 
         val fields = fieldsAt(project, declaration, path)
-        logger.info("Fields at ${declaration.name}/${path.joinToString("/")}: ${fields.size}")
+        logger.debug { "Fields at ${declaration.name}/${path.joinToString("/")}: ${fields.size}" }
         if (fields.isEmpty()) return
 
         val taken = takenAt(declaration, position, path)
         val typeText =
-            if (path.isNotEmpty()) path.last()
+            if (isComponentEntry(declaration, path)) "component"
+            else if (path.isNotEmpty()) path.last()
             else if (declaration.isComponent) declaration.name
             else "${declaration.name} prototype"
         var offered = 0
         for (field in fields) {
             if (field in taken) continue
-            result.addElement(LookupElementBuilder.create(field).withTypeText(typeText, true))
+            val handler =
+                if (hasSuggestions(project, declaration, path, field)) KeyInsertHandler.WITH_POPUP
+                else KeyInsertHandler.PLAIN
+            result.addElement(
+                LookupElementBuilder.create(field)
+                    .withTypeText(typeText, true)
+                    .withInsertHandler(handler),
+            )
             offered++
         }
         if (offered > 0) result.stopHere()
@@ -67,6 +108,7 @@ private object DataFieldProvider : CompletionProvider<CompletionParameters>() {
             return if (declaration.isComponent) RobustDataFields.forComponent(project, declaration.name)
             else RobustDataFields.forPrototype(project, declaration.name)
         }
+        if (isComponentEntry(declaration, path)) return listOf(TYPE_KEY)
 
         val owner = RobustValidation.fieldAt(project, declaration, path.dropLast(1), path.last())
         if (owner?.dictionary == true) return emptyList()
@@ -88,11 +130,50 @@ private object DataFieldProvider : CompletionProvider<CompletionParameters>() {
         return target.keyValues.mapNotNull { it.keyText }.toSet()
     }
 
-    private fun atKeyPosition(parameters: CompletionParameters): Boolean {
-        val document = parameters.editor.document
-        val offset = parameters.offset
-        val lineStart = document.getLineStartOffset(document.getLineNumber(offset))
-        return !document.charsSequence.subSequence(lineStart, offset).contains(':')
+    private fun hasSuggestions(
+        project: Project,
+        declaration: RobustYamlContext.DeclarationContext,
+        path: List<String>,
+        field: String,
+    ): Boolean {
+        if (isComponentEntry(declaration, path)) return true
+        if (RobustYamlContext.isResourcePathKey(field)) return true
+
+        val declared = RobustValidation.fieldAt(project, declaration, path, field) ?: return false
+        return declared.values.isNotEmpty() ||
+            declared.keyValues.isNotEmpty() ||
+            declared.prototypeKind != null ||
+            declared.keyPrototypeKind != null
+    }
+
+    private fun isComponentEntry(
+        declaration: RobustYamlContext.DeclarationContext,
+        path: List<String>,
+    ): Boolean = !declaration.isComponent &&
+        declaration.name == ENTITY_KIND &&
+        path == listOf(COMPONENTS_KEY)
+
+    private const val TYPE_KEY = "type"
+    private const val COMPONENTS_KEY = "components"
+    private const val ENTITY_KIND = "entity"
+}
+
+private object EnumValueProvider : CompletionProvider<CompletionParameters>() {
+    override fun addCompletions(
+        parameters: CompletionParameters,
+        context: ProcessingContext,
+        result: CompletionResultSet,
+    ) {
+        val position = parameters.position
+        val field = RobustValidation.fieldAround(position) ?: return
+        val values = if (atKeyPosition(parameters)) field.keyValues else field.values
+        logger.debug { "Enum values for '${field.name}: ${field.type}': ${values.size}" }
+        if (values.isEmpty()) return
+
+        for (value in values) {
+            result.addElement(LookupElementBuilder.create(value).withTypeText(field.type, true))
+        }
+        result.stopHere()
     }
 }
 
@@ -114,7 +195,7 @@ private object PrototypeIdProvider : CompletionProvider<CompletionParameters>() 
                 RobustPrototypeIndex.ids(project)
             else -> return
         }
-        logger.info("Ids for kind '${kind ?: "any"}': ${ids.size}")
+        logger.debug { "Ids for kind '${kind ?: "any"}': ${ids.size}" }
 
         val typeText = kind ?: "prototype id"
         for (id in ids) {

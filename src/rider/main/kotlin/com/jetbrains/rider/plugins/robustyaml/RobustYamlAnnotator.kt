@@ -18,6 +18,7 @@ class RobustYamlAnnotator : Annotator {
                     reportUnknownField(element, holder)
                     reportDuplicateId(element, holder)
                     reportPrototypeIdValues(element, holder)
+                    reportEnumValues(element, holder)
                 }
             }
             is YAMLScalar -> {
@@ -53,6 +54,17 @@ class RobustYamlAnnotator : Annotator {
                 .range(problem.element)
             for (suggestion in problem.suggestions) {
                 builder = builder.withFix(ChangePrototypeIdFix(problem.element, suggestion))
+            }
+            builder.create()
+        }
+    }
+
+    private fun reportEnumValues(keyValue: YAMLKeyValue, holder: AnnotationHolder) {
+        for (problem in RobustValidation.enumValues(keyValue)) {
+            var builder = holder.newAnnotation(HighlightSeverity.ERROR, problem.message)
+                .range(problem.element)
+            for (suggestion in problem.suggestions) {
+                builder = builder.withFix(ChangeEnumValueFix(problem.element, suggestion))
             }
             builder.create()
         }

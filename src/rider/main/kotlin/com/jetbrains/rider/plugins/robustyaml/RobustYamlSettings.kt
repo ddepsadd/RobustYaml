@@ -11,6 +11,7 @@ import com.intellij.openapi.project.Project
 class RobustYamlState : BaseState() {
     var autoDetect by property(true)
     var customRoots by list<String>()
+    var alignSequenceDash by property(true)
 }
 
 @Service(Service.Level.PROJECT)

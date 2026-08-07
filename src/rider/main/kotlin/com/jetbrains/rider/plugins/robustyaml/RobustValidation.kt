@@ -14,6 +14,8 @@ object RobustValidation {
 
     data class IdProblem(val element: YAMLScalar, val message: String, val suggestions: List<String>)
 
+    data class EnumProblem(val element: YAMLScalar, val message: String, val suggestions: List<String>)
+
     fun unknownField(keyValue: YAMLKeyValue): UnknownField? {
         val name = keyValue.keyText
         if (name.isEmpty() || name == TYPE_KEY || !name.all { it.isLetterOrDigit() || it == '_' }) return null
@@ -59,6 +61,54 @@ object RobustValidation {
         return problems
     }
 
+    fun enumValues(keyValue: YAMLKeyValue): List<EnumProblem> {
+        val field = typedField(keyValue) ?: return emptyList()
+        if (field.values.isEmpty() && field.keyValues.isEmpty()) return emptyList()
+
+        val problems = mutableListOf<EnumProblem>()
+        when (val value = keyValue.value) {
+            is YAMLMapping ->
+                for (entry in value.keyValues) {
+                    val key = entry.key as? YAMLScalar ?: continue
+                    checkEnum(field.keyValues, key, entry.keyText)?.let { problems += it }
+                }
+            is YAMLSequence ->
+                for (item in value.items) {
+                    val scalar = item.value as? YAMLScalar ?: continue
+                    checkEnum(field.values, scalar, scalar.textValue)?.let { problems += it }
+                }
+            is YAMLScalar ->
+                checkEnum(field.values, value, value.textValue)?.let { problems += it }
+            else -> {}
+        }
+        return problems
+    }
+
+    private fun checkEnum(values: List<String>, element: YAMLScalar, raw: String): EnumProblem? {
+        if (values.isEmpty()) return null
+
+        val parts = raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        if (parts.isEmpty() || parts.any { !looksLikeEnumValue(it) }) return null
+
+        val unknown = parts.filter { part -> values.none { it.equals(part, ignoreCase = true) } }
+        if (unknown.isEmpty()) return null
+
+        val name = unknown.first()
+        val expected =
+            if (values.size <= LISTED_VALUES) ", expected one of: ${values.joinToString()}" else ""
+        return EnumProblem(
+            element,
+            "Unknown enum value '$name'$expected",
+            ChangeEnumValueFix.suggest(name, values),
+        )
+    }
+
+    private fun looksLikeEnumValue(text: String): Boolean {
+        if (text in NON_IDS) return false
+        if (text.toLongOrNull() != null) return false
+        return text.all { it.isLetterOrDigit() || it == '_' }
+    }
+
     private fun check(project: Project, kind: String?, element: YAMLScalar, raw: String): IdProblem? {
         if (kind == null) return null
 
@@ -84,17 +134,21 @@ object RobustValidation {
         return typedField(owner)?.prototypeKind
     }
 
+    fun field(keyValue: YAMLKeyValue): RobustDataField? = typedField(keyValue)
+
     private fun typedField(keyValue: YAMLKeyValue): RobustDataField? {
         val declaration = RobustYamlContext.declarationAround(keyValue) ?: return null
         val path = RobustYamlContext.pathTo(declaration, keyValue) ?: return null
         return fieldAt(keyValue.project, declaration, path, keyValue.keyText)
     }
 
-    fun keyKindAt(element: PsiElement): String? {
+    fun keyKindAt(element: PsiElement): String? = fieldAround(element)?.keyPrototypeKind
+
+    fun fieldAround(element: PsiElement): RobustDataField? {
         val declaration = RobustYamlContext.declarationAround(element) ?: return null
         val path = RobustYamlContext.pathAt(declaration, element) ?: return null
         if (path.isEmpty()) return null
-        return fieldAt(element.project, declaration, path.dropLast(1), path.last())?.keyPrototypeKind
+        return fieldAt(element.project, declaration, path.dropLast(1), path.last())
     }
 
     fun fieldAt(
@@ -151,5 +205,6 @@ object RobustValidation {
     }
 
     private const val TYPE_KEY = "type"
+    private const val LISTED_VALUES = 8
     private val NON_IDS = setOf("null", "true", "false")
 }

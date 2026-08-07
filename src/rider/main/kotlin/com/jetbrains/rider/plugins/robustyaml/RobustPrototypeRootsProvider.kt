@@ -3,6 +3,7 @@ package com.jetbrains.rider.plugins.robustyaml
 import com.intellij.icons.AllIcons
 import com.intellij.navigation.ItemPresentation
 import com.intellij.openapi.application.WriteAction
+import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
@@ -56,14 +57,14 @@ class RobustPrototypeRootsProvider : AdditionalLibraryRootsProvider() {
         private fun computeRoots(project: Project): List<VirtualFile> {
             val base = project.guessProjectDir()
             if (base == null) {
-                logger.info("No project dir, no prototype roots")
+                logger.debug("No project dir, no prototype roots")
                 return emptyList()
             }
             val settings = RobustYamlSettings.getInstance(project).state
             val detected = if (settings.autoDetect) autoDetect(base) else emptyList()
             val custom = settings.customRoots.mapNotNull { resolve(base, it) }
             val roots = (detected + custom).filter { it.isValid && it.isDirectory }.distinct()
-            logger.info("Prototype roots under ${base.path}: ${roots.joinToString { it.path }}")
+            logger.debug { "Prototype roots under ${base.path}: ${roots.joinToString { it.path }}" }
             return roots
         }
 

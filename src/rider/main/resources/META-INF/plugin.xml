@@ -47,6 +47,14 @@
         implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustDuplicatePrototypeIdInspection" />
     <localInspection
         language="yaml"
+        shortName="RobustInvalidEnumValue"
+        displayName="Invalid enum value"
+        groupName="Robust YAML"
+        level="ERROR"
+        enabledByDefault="true"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustInvalidEnumValueInspection" />
+    <localInspection
+        language="yaml"
         shortName="RobustUnknownField"
         displayName="Unknown component or prototype field"
         groupName="Robust YAML"
@@ -62,6 +70,15 @@
     <psi.referenceContributor
         language="yaml"
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceContributor" />
+    <codeStyleSettingsModifier
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustCodeStyleModifier" />
+    <typedHandler
+        order="last"
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustSequenceIndentHandler" />
+    <editorActionHandler
+        action="EditorEnter"
+        order="last"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustSequenceEnterHandler" />
     <completion.contributor
         language="yaml"
         order="first"

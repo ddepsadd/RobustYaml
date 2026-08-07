@@ -17,6 +17,9 @@ object RobustYamlModel : Ext(SolutionModel.Solution) {
         field("prototypeKind", PredefinedType.string.nullable)
         field("keyPrototypeKind", PredefinedType.string.nullable)
         field("dictionary", PredefinedType.bool)
+        field("sequence", PredefinedType.bool)
+        field("values", immutableList(PredefinedType.string))
+        field("keyValues", immutableList(PredefinedType.string))
     }
 
     private val RobustFieldQuery = structdef {

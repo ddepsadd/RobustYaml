@@ -16,6 +16,8 @@ object RobustYamlContext {
         return keyValue.value === scalar && keyValue.keyText in RESOURCE_PATH_KEYS
     }
 
+    fun isResourcePathKey(name: String): Boolean = name in RESOURCE_PATH_KEYS
+
     data class DeclarationContext(val isComponent: Boolean, val name: String, val mapping: YAMLMapping)
 
     fun declarationAround(element: PsiElement): DeclarationContext? {

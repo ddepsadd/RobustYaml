@@ -122,10 +122,20 @@ private class FieldDocumentationTarget(
                 }
 
                 val kind = declared?.prototypeKind
-                if (kind != null || owner != null) {
+                val values = declared?.values.orEmpty() + declared?.keyValues.orEmpty()
+                if (kind != null || owner != null || values.isNotEmpty()) {
                     append(DocumentationMarkup.SECTIONS_START)
                     if (kind != null) {
                         section("Prototype", RobustYamlColors.PROTOTYPE_KIND, kind)
+                    }
+                    if (values.isNotEmpty()) {
+                        val shown = values.take(LISTED_VALUES).joinToString()
+                        val rest = values.size - LISTED_VALUES
+                        section(
+                            "Values",
+                            DefaultLanguageHighlighterColors.STATIC_FIELD,
+                            if (rest > 0) "$shown, … ($rest more)" else shown,
+                        )
                     }
                     if (owner != null) {
                         section("Declared in", DefaultLanguageHighlighterColors.CLASS_NAME, owner)
@@ -135,6 +145,10 @@ private class FieldDocumentationTarget(
             }
             DocumentationResult.documentation(DocumentationContent.content(html))
         }
+
+    private companion object {
+        const val LISTED_VALUES = 12
+    }
 
     private fun summary(owner: String): String? {
         for (file in RobustDataFields.declaringFiles(project, owner)) {

@@ -85,13 +85,17 @@ class RobustBackend(private val project: Project, private val scope: CoroutineSc
                 model.typeFields.startSuspending(RobustFieldQuery(className, path))
             }
         }.onSuccess { reply ->
-            val kinds = reply.fields.mapNotNull { field ->
-                val kind = field.prototypeKind ?: field.keyPrototypeKind ?: return@mapNotNull null
-                "${field.name}=$kind"
-            }.joinToString()
-            val docs = reply.fields.count { it.summary != null }
-            val state = if (reply.resolved) "resolved" else "unbuilt"
-            logger.info("Backend returned ${reply.fields.size} fields ($docs documented, $state) for '$key' [$kinds]")
+            if (logger.isDebugEnabled) {
+                val kinds = reply.fields.mapNotNull { field ->
+                    val kind = field.prototypeKind ?: field.keyPrototypeKind ?: return@mapNotNull null
+                    "${field.name}=$kind"
+                }.joinToString()
+                val docs = reply.fields.count { it.summary != null }
+                val state = if (reply.resolved) "resolved" else "unbuilt"
+                logger.debug(
+                    "Backend returned ${reply.fields.size} fields ($docs documented, $state) for '$key' [$kinds]",
+                )
+            }
             if (!reply.resolved) {
                 cache.remove(key)
             } else {
@@ -99,7 +103,7 @@ class RobustBackend(private val project: Project, private val scope: CoroutineSc
                 if (reply.fields.isNotEmpty()) scheduleRestart()
             }
         }.onFailure {
-            logger.info("Backend call failed for '$key'", it)
+            logger.warn("Backend call failed for '$key'", it)
             cache.remove(key)
         }.map { it.fields }.getOrDefault(emptyList())
     }

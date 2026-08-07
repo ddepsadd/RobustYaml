@@ -47,6 +47,12 @@ namespace ReSharperPlugin.RobustYaml
             public string Value;
         }
 
+        private struct Values
+        {
+            public List<string> Key;
+            public List<string> Value;
+        }
+
         private RobustFieldsReply Fields(string className, List<string> path)
         {
             using (ReadLockCookie.Create())
@@ -114,13 +120,17 @@ namespace ReSharperPlugin.RobustYaml
                     if (presentable.Contains(Unresolved))
                         return Unbuilt;
 
+                    var values = EnumValues(field.Type, type.Module);
                     result.Add(new RobustDataField(
                         field.Name,
                         presentable,
                         Summary(field.Member),
                         field.PrototypeKind,
                         field.KeyPrototypeKind,
-                        IsDictionary(field.Type, type.Module)));
+                        IsDictionary(field.Type, type.Module),
+                        IsSequence(field.Type, type.Module),
+                        values.Value,
+                        values.Key));
                 }
             }
 
@@ -259,6 +269,44 @@ namespace ReSharperPlugin.RobustYaml
             var values = CollectionTypeUtil.GetElementTypesForGenericType(
                 declared, module.GetPredefinedType().GenericIDictionary, 1);
             return values != null && values.Count > 0;
+        }
+
+        private static bool IsSequence(IType type, IPsiModule module)
+        {
+            var declared = type.Unlift() as IDeclaredType;
+            if (declared == null || declared.IsString() || IsDictionary(type, module))
+                return false;
+
+            return CollectionTypeUtil.GetElementTypesForGenericEnumerable(declared, false).Count > 0;
+        }
+
+        private static Values EnumValues(IType type, IPsiModule module)
+        {
+            var result = new Values
+            {
+                Key = new List<string>(),
+                Value = Members(type) ?? Members(UnwrapType(type, module)) ?? new List<string>(),
+            };
+
+            var declared = type.Unlift() as IDeclaredType;
+            if (declared != null)
+            {
+                var keys = CollectionTypeUtil.GetElementTypesForGenericType(
+                    declared, module.GetPredefinedType().GenericIDictionary, 0);
+                if (keys != null && keys.Count > 0)
+                    result.Key = Members(keys[0]) ?? result.Key;
+            }
+
+            return result;
+        }
+
+        private static List<string> Members(IType type)
+        {
+            var enumeration = (type.Unlift() as IDeclaredType)?.GetTypeElement() as IEnum;
+            return enumeration?.EnumMembers
+                .Where(it => it.IsEnumMember)
+                .Select(it => it.ShortName)
+                .ToList();
         }
 
         private static ITypeElement Unwrap(IType type, IPsiModule module)

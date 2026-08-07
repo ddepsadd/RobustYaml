@@ -20,6 +20,14 @@ class RobustYamlConfigurable(private val project: Project) : BoundConfigurable("
                 .comment("Looks for a Prototypes directory inside any top-level project directory.")
         }
         row {
+            checkBox("Align sequence dash with its key")
+                .bindSelected(state::alignSequenceDash)
+                .comment(
+                    "Typing '-' on a fresh line under a key moves it back to the key's own indent, " +
+                        "the way prototypes are written.",
+                )
+        }
+        row {
             textArea()
                 .align(AlignX.FILL)
                 .rows(6)
