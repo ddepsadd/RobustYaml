@@ -36,7 +36,7 @@ class RobustYamlModel private constructor(
         
         
         
-        const val serializationHash = -57370313241853098L
+        const val serializationHash = -2428411156860904630L
         
     }
     override val serializersOwner: ISerializersOwner get() = RobustYamlModel
@@ -91,6 +91,8 @@ data class RobustDataField (
     val keyPrototypeKind: String?,
     val dictionary: Boolean,
     val sequence: Boolean,
+    val customSerializer: Boolean,
+    val localized: Boolean,
     val values: List<String>,
     val keyValues: List<String>
 ) : IPrintable {
@@ -109,9 +111,11 @@ data class RobustDataField (
             val keyPrototypeKind = buffer.readNullable { buffer.readString() }
             val dictionary = buffer.readBool()
             val sequence = buffer.readBool()
+            val customSerializer = buffer.readBool()
+            val localized = buffer.readBool()
             val values = buffer.readList { buffer.readString() }
             val keyValues = buffer.readList { buffer.readString() }
-            return RobustDataField(name, type, summary, prototypeKind, keyPrototypeKind, dictionary, sequence, values, keyValues)
+            return RobustDataField(name, type, summary, prototypeKind, keyPrototypeKind, dictionary, sequence, customSerializer, localized, values, keyValues)
         }
         
         override fun write(ctx: SerializationCtx, buffer: AbstractBuffer, value: RobustDataField)  {
@@ -122,6 +126,8 @@ data class RobustDataField (
             buffer.writeNullable(value.keyPrototypeKind) { buffer.writeString(it) }
             buffer.writeBool(value.dictionary)
             buffer.writeBool(value.sequence)
+            buffer.writeBool(value.customSerializer)
+            buffer.writeBool(value.localized)
             buffer.writeList(value.values) { v -> buffer.writeString(v) }
             buffer.writeList(value.keyValues) { v -> buffer.writeString(v) }
         }
@@ -146,6 +152,8 @@ data class RobustDataField (
         if (keyPrototypeKind != other.keyPrototypeKind) return false
         if (dictionary != other.dictionary) return false
         if (sequence != other.sequence) return false
+        if (customSerializer != other.customSerializer) return false
+        if (localized != other.localized) return false
         if (values != other.values) return false
         if (keyValues != other.keyValues) return false
         
@@ -161,6 +169,8 @@ data class RobustDataField (
         __r = __r*31 + if (keyPrototypeKind != null) keyPrototypeKind.hashCode() else 0
         __r = __r*31 + dictionary.hashCode()
         __r = __r*31 + sequence.hashCode()
+        __r = __r*31 + customSerializer.hashCode()
+        __r = __r*31 + localized.hashCode()
         __r = __r*31 + values.hashCode()
         __r = __r*31 + keyValues.hashCode()
         return __r
@@ -176,6 +186,8 @@ data class RobustDataField (
             print("keyPrototypeKind = "); keyPrototypeKind.print(printer); println()
             print("dictionary = "); dictionary.print(printer); println()
             print("sequence = "); sequence.print(printer); println()
+            print("customSerializer = "); customSerializer.print(printer); println()
+            print("localized = "); localized.print(printer); println()
             print("values = "); values.print(printer); println()
             print("keyValues = "); keyValues.print(printer); println()
         }
@@ -188,7 +200,7 @@ data class RobustDataField (
 
 
 /**
- * #### Generated from [RobustYamlModel.kt:25]
+ * #### Generated from [RobustYamlModel.kt:27]
  */
 data class RobustFieldQuery (
     val className: String,
@@ -253,7 +265,7 @@ data class RobustFieldQuery (
 
 
 /**
- * #### Generated from [RobustYamlModel.kt:30]
+ * #### Generated from [RobustYamlModel.kt:32]
  */
 data class RobustFieldsReply (
     val resolved: Boolean,

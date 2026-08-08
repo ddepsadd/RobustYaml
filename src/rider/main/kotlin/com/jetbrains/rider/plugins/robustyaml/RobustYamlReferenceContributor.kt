@@ -40,7 +40,29 @@ class RobustYamlReferenceContributor : PsiReferenceContributor() {
             PlatformPatterns.psiElement(YAMLScalar::class.java),
             PrototypeIdReferenceProvider,
         )
+        registrar.registerReferenceProvider(
+            PlatformPatterns.psiElement(YAMLScalar::class.java),
+            LocalizationIdReferenceProvider,
+        )
     }
+}
+
+private object LocalizationIdReferenceProvider : PsiReferenceProvider() {
+    override fun getReferencesByElement(
+        element: PsiElement,
+        context: ProcessingContext,
+    ): Array<PsiReference> {
+        val scalar = element as? YAMLScalar ?: return PsiReference.EMPTY_ARRAY
+        if (!RobustYamlContext.isLocalizationValue(scalar)) return PsiReference.EMPTY_ARRAY
+        return arrayOf(LocalizationIdReference(scalar))
+    }
+}
+
+class LocalizationIdReference(scalar: YAMLScalar) :
+    PsiReferenceBase<YAMLScalar>(scalar, ElementManipulators.getValueTextRange(scalar), true) {
+
+    override fun resolve(): PsiElement? =
+        RobustLocalization.declaration(element.project, RobustLocalization.messageId(value))
 }
 
 private object PrototypeIdReferenceProvider : PsiReferenceProvider() {

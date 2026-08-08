@@ -16,8 +16,36 @@ object RobustDataFields {
     fun forPrototype(project: Project, kind: String): List<String> =
         cached(project, RobustDataFieldIndex.PROTOTYPE_KEY + kind)
 
+    fun requiredForComponent(project: Project, component: String): List<String> =
+        cache(project).computeIfAbsent(REQUIRED_PREFIX + RobustDataFieldIndex.COMPONENT_KEY + component) {
+            requiredOf(project, it.removePrefix(REQUIRED_PREFIX))
+        }
+
     private fun cached(project: Project, aliasKey: String): List<String> =
         cache(project).computeIfAbsent(aliasKey) { fieldsOf(project, it) }
+
+    private fun requiredOf(project: Project, aliasKey: String): List<String> {
+        val className = values(project, aliasKey).firstOrNull() ?: return emptyList()
+        val required = sortedSetOf<String>()
+        collectRequired(project, className, required, mutableSetOf())
+        return required.toList()
+    }
+
+    private fun collectRequired(
+        project: Project,
+        className: String,
+        into: MutableSet<String>,
+        visited: MutableSet<String>,
+    ) {
+        if (!visited.add(className) || visited.size > MAX_HIERARCHY) return
+
+        for (value in values(project, RobustDataFieldIndex.CLASS_KEY + className)) {
+            into += RobustDataFieldIndex.parseRequired(value)
+            for (base in RobustDataFieldIndex.parseBases(value)) {
+                collectRequired(project, base, into, visited)
+            }
+        }
+    }
 
     private fun cache(project: Project): ConcurrentHashMap<String, List<String>> =
         CachedValuesManager.getManager(project).getCachedValue(project) {
@@ -91,4 +119,5 @@ object RobustDataFields {
             .getValues(RobustDataFieldIndex.NAME, key, ProjectScope.getContentScope(project))
 
     private const val MAX_HIERARCHY = 32
+    private const val REQUIRED_PREFIX = "required@"
 }

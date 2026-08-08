@@ -15,11 +15,13 @@ class RobustYamlAnnotator : Annotator {
             is YAMLKeyValue -> {
                 annotateTypeKey(element, holder)
                 if (!inspectionsRun(element)) {
+                    reportMissingRequired(element, holder)
                     reportUnknownField(element, holder)
                     reportDuplicateId(element, holder)
                     reportPrototypeIdValues(element, holder)
                     reportEnumValues(element, holder)
                     reportScalarValues(element, holder)
+                    reportLocalizationIds(element, holder)
                 }
             }
             is YAMLScalar -> {
@@ -73,10 +75,28 @@ class RobustYamlAnnotator : Annotator {
         }
     }
 
+    private fun reportMissingRequired(keyValue: YAMLKeyValue, holder: AnnotationHolder) {
+        val missing = RobustRequiredFields.missing(keyValue)
+        if (missing.isEmpty()) return
+
+        holder.newAnnotation(HighlightSeverity.ERROR, RobustRequiredFields.message(keyValue, missing))
+            .range(keyValue.value ?: keyValue)
+            .create()
+    }
+
     private fun reportScalarValues(keyValue: YAMLKeyValue, holder: AnnotationHolder) {
         for (problem in RobustValidation.scalarValues(keyValue)) {
             holder.newAnnotation(HighlightSeverity.ERROR, problem.message)
                 .range(problem.element)
+                .create()
+        }
+    }
+
+    private fun reportLocalizationIds(keyValue: YAMLKeyValue, holder: AnnotationHolder) {
+        for (problem in RobustValidation.localizationIds(keyValue)) {
+            holder.newAnnotation(HighlightSeverity.WARNING, problem.message)
+                .range(problem.element)
+                .enforcedTextAttributes(RobustYamlColors.waveAttributes(false))
                 .create()
         }
     }

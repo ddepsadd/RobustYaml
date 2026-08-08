@@ -14,7 +14,7 @@ private class ClassScope(val name: String, val start: Int, val end: Int, val dep
 class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
     override fun getName(): ID<String, String> = NAME
 
-    override fun getVersion(): Int = 6
+    override fun getVersion(): Int = 7
 
     override fun dependsOnFileContent(): Boolean = true
 
@@ -48,6 +48,7 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
         private val ATTRIBUTE =
             Regex("""[\[,]\s*(DataField|IdDataField|ParentDataField|AbstractDataField)(?:Attribute)?\s*(?:\(\s*"([^"]+)")?""")
         private val INCLUDE = Regex("""[\[,]\s*IncludeDataField(?:Attribute)?""")
+        private val REQUIRED = Regex("""required\s*:\s*true""")
         private val FIELD =
             Regex("""(?:public|private|protected|internal)\s[^;{=]*?\s(\w+)\s*(?:=|;|\{)""")
         private val FIELD_TYPE =
@@ -81,6 +82,7 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
             val scopes = classScopes(text, classes)
 
             val fields = mutableMapOf<String, MutableSet<String>>()
+            val required = mutableMapOf<String, MutableSet<String>>()
             for (attribute in ATTRIBUTE.findAll(text)) {
                 val owner = ownerAt(scopes, classes, attribute.range.first) ?: continue
                 val name = SPECIAL_NAMES[attribute.groupValues[1]]
@@ -88,6 +90,9 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
                     ?: fieldNameAfter(text, attribute.range.last)
                     ?: continue
                 fields.getOrPut(owner) { mutableSetOf() } += name
+                if (REQUIRED.containsMatchIn(argumentsOf(text, attribute.range.last))) {
+                    required.getOrPut(owner) { mutableSetOf() } += name
+                }
             }
 
             val included = mutableMapOf<String, MutableSet<String>>()
@@ -103,7 +108,9 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
                 val bases = basesOf(match) + included[name].orEmpty()
                 val names = fields[name].orEmpty()
                 if (bases.isEmpty() && names.isEmpty()) continue
-                result[CLASS_KEY + name] = bases.joinToString(",") + "|" + names.joinToString(",")
+                result[CLASS_KEY + name] = bases.joinToString(",") +
+                    "|" + names.joinToString(",") +
+                    "|" + required[name].orEmpty().joinToString(",")
             }
 
             val registered = text.contains(REGISTER_MARKER)
@@ -143,11 +150,39 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
             return null
         }
 
-        fun parseBases(value: String): List<String> =
-            value.substringBefore('|').split(',').filter { it.isNotEmpty() }
+        fun parseBases(value: String): List<String> = part(value, 0)
 
-        fun parseFields(value: String): List<String> =
-            value.substringAfter('|').split(',').filter { it.isNotEmpty() }
+        fun parseFields(value: String): List<String> = part(value, 1)
+
+        fun parseRequired(value: String): List<String> = part(value, 2)
+
+        private fun part(value: String, index: Int): List<String> =
+            value.split('|').getOrNull(index)?.split(',')?.filter { it.isNotEmpty() }.orEmpty()
+
+        private fun argumentsOf(text: CharSequence, attributeEnd: Int): CharSequence {
+            var i = attributeEnd + 1
+            while (i < text.length && text[i].isWhitespace()) i++
+            if (i >= text.length || text[i] != '(') return ""
+
+            val start = i
+            var depth = 0
+            var quoted = false
+            while (i < text.length) {
+                val current = text[i]
+                when {
+                    quoted && current == '\\' -> i++
+                    current == '"' -> quoted = !quoted
+                    quoted -> Unit
+                    current == '(' -> depth++
+                    current == ')' -> {
+                        depth--
+                        if (depth == 0) return text.subSequence(start, i)
+                    }
+                }
+                i++
+            }
+            return ""
+        }
 
         private fun className(match: MatchResult): String = match.groupValues[1]
 

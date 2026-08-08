@@ -56,6 +56,8 @@ class RobustComponentCompletionContributor : CompletionContributor() {
         extend(CompletionType.BASIC, PlatformPatterns.psiElement(), PrototypeKindProvider)
         extend(CompletionType.BASIC, PlatformPatterns.psiElement(), PrototypeIdProvider)
         extend(CompletionType.BASIC, PlatformPatterns.psiElement(), EnumValueProvider)
+        extend(CompletionType.BASIC, PlatformPatterns.psiElement(), LocalizationIdProvider)
+        extend(CompletionType.BASIC, PlatformPatterns.psiElement(), ColorNameProvider)
         extend(CompletionType.BASIC, PlatformPatterns.psiElement(), DataFieldProvider)
     }
 }
@@ -142,6 +144,8 @@ private object DataFieldProvider : CompletionProvider<CompletionParameters>() {
         val declared = RobustValidation.fieldAt(project, declaration, path, field) ?: return false
         return declared.values.isNotEmpty() ||
             declared.keyValues.isNotEmpty() ||
+            declared.localized ||
+            RobustValidation.isColorField(declared) ||
             declared.prototypeKind != null ||
             declared.keyPrototypeKind != null
     }
@@ -175,6 +179,50 @@ private object EnumValueProvider : CompletionProvider<CompletionParameters>() {
         }
         result.stopHere()
     }
+}
+
+private object ColorNameProvider : CompletionProvider<CompletionParameters>() {
+    override fun addCompletions(
+        parameters: CompletionParameters,
+        context: ProcessingContext,
+        result: CompletionResultSet,
+    ) {
+        val position = parameters.position
+        if (atKeyPosition(parameters)) return
+
+        val field = RobustValidation.fieldAround(position) ?: return
+        if (!RobustValidation.isColorField(field)) return
+
+        for (name in RobustValidation.colorNames()) {
+            result.addElement(LookupElementBuilder.create(name).withTypeText(field.type, true))
+        }
+        result.stopHere()
+    }
+}
+
+private object LocalizationIdProvider : CompletionProvider<CompletionParameters>() {
+    override fun addCompletions(
+        parameters: CompletionParameters,
+        context: ProcessingContext,
+        result: CompletionResultSet,
+    ) {
+        val position = parameters.position
+        if (atKeyPosition(parameters)) return
+
+        val field = RobustValidation.fieldAround(position) ?: return
+        if (!field.localized) return
+
+        val keys = RobustLocalization.keys(position.project)
+        logger.debug { "Localization ids for '${field.name}': ${keys.size}" }
+        if (keys.isEmpty()) return
+
+        for (key in keys) {
+            result.addElement(LookupElementBuilder.create(key).withTypeText(LOC_ID_TYPE, true))
+        }
+        result.stopHere()
+    }
+
+    private const val LOC_ID_TYPE = "LocId"
 }
 
 private object PrototypeIdProvider : CompletionProvider<CompletionParameters>() {

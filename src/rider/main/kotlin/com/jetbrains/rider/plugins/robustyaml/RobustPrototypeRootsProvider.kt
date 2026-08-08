@@ -32,17 +32,39 @@ class RobustPrototypeLibrary(private val roots: List<VirtualFile>) : SyntheticLi
 
 class RobustPrototypeRootsProvider : AdditionalLibraryRootsProvider() {
     override fun getAdditionalProjectLibraries(project: Project): Collection<SyntheticLibrary> {
-        val roots = findPrototypeRoots(project)
+        val roots = indexedRoots(project)
         if (roots.isEmpty()) return emptyList()
         return listOf(RobustPrototypeLibrary(roots))
     }
 
-    override fun getRootsToWatch(project: Project): Collection<VirtualFile> = findPrototypeRoots(project)
+    override fun getRootsToWatch(project: Project): Collection<VirtualFile> = indexedRoots(project)
 
     companion object {
         private const val LIBRARY_NAME = "Robust Prototypes"
 
         private val logger = logger<RobustPrototypeRootsProvider>()
+
+        fun indexedRoots(project: Project): List<VirtualFile> =
+            findPrototypeRoots(project) + findLocaleRoots(project)
+
+        fun findLocaleRoots(project: Project): List<VirtualFile> =
+            CachedValuesManager.getManager(project).getCachedValue(project) {
+                CachedValueProvider.Result.create(
+                    computeLocaleRoots(project),
+                    VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS,
+                    ProjectRootManager.getInstance(project),
+                )
+            }
+
+        private fun computeLocaleRoots(project: Project): List<VirtualFile> {
+            val base = project.guessProjectDir() ?: return emptyList()
+            val roots = RobustResources.resourceRoots(base)
+                .mapNotNull { it.findChild(LOCALE_DIR) }
+                .filter { it.isValid && it.isDirectory }
+                .distinct()
+            logger.debug { "Locale roots under ${base.path}: ${roots.joinToString { it.path }}" }
+            return roots
+        }
 
         fun findPrototypeRoots(project: Project): List<VirtualFile> =
             CachedValuesManager.getManager(project).getCachedValue(project) {
@@ -74,7 +96,7 @@ class RobustPrototypeRootsProvider : AdditionalLibraryRootsProvider() {
                     project,
                     LIBRARY_NAME,
                     oldRoots,
-                    findPrototypeRoots(project),
+                    indexedRoots(project),
                     LIBRARY_NAME,
                 )
             }
@@ -82,6 +104,7 @@ class RobustPrototypeRootsProvider : AdditionalLibraryRootsProvider() {
 
         private const val MAX_SCANNED_ENTRIES = 5000
         private const val PROTOTYPES_SUFFIX = "Prototypes"
+        private const val LOCALE_DIR = "Locale"
 
         private fun autoDetect(base: VirtualFile): List<VirtualFile> =
             (listOf(base) + base.children.filter { it.isDirectory } + RobustResources.resourceRoots(base))

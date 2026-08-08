@@ -18,6 +18,8 @@ object RobustYamlModel : Ext(SolutionModel.Solution) {
         field("keyPrototypeKind", PredefinedType.string.nullable)
         field("dictionary", PredefinedType.bool)
         field("sequence", PredefinedType.bool)
+        field("customSerializer", PredefinedType.bool)
+        field("localized", PredefinedType.bool)
         field("values", immutableList(PredefinedType.string))
         field("keyValues", immutableList(PredefinedType.string))
     }

@@ -39,6 +39,8 @@ namespace ReSharperPlugin.RobustYaml
             public ITypeMember Member;
             public string PrototypeKind;
             public string KeyPrototypeKind;
+            public bool CustomSerializer;
+            public List<string> Constants;
         }
 
         private struct Kinds
@@ -121,6 +123,9 @@ namespace ReSharperPlugin.RobustYaml
                         return Unbuilt;
 
                     var values = EnumValues(field.Type, type.Module);
+                    if (field.Constants != null)
+                        values.Value = field.Constants;
+
                     result.Add(new RobustDataField(
                         field.Name,
                         presentable,
@@ -129,6 +134,8 @@ namespace ReSharperPlugin.RobustYaml
                         field.KeyPrototypeKind,
                         IsDictionary(field.Type, type.Module),
                         IsSequence(field.Type, type.Module),
+                        field.CustomSerializer,
+                        IsLocalized(field.Type, type.Module),
                         values.Value,
                         values.Key));
                 }
@@ -214,6 +221,8 @@ namespace ReSharperPlugin.RobustYaml
                         Member = member,
                         PrototypeKind = kinds.Value,
                         KeyPrototypeKind = kinds.Key,
+                        CustomSerializer = SerializerArgument(attribute) != null,
+                        Constants = ConstantValues(attribute, type),
                     });
                 }
 
@@ -339,6 +348,60 @@ namespace ReSharperPlugin.RobustYaml
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Values a <c>ConstantSerializer&lt;TTag&gt;</c> accepts: the members of the enum marked
+        /// <c>[ConstantsFor(typeof(TTag))]</c>. The tag itself carries no members, so the enum has to
+        /// be looked up, and the only handle on it is its short name — which the engine and the
+        /// content spell the same (<c>DrawDepth</c>). The search runs in the full symbol scope, not
+        /// in the owner's module: <c>drawdepth</c> is declared in <c>Robust.Client</c>, the enum
+        /// lives in <c>Content.Shared</c>, and the engine does not reference the content. The
+        /// attribute has to be there, and its argument is compared when it resolves.
+        /// </summary>
+        private static List<string> ConstantValues(IAttribute attribute, ITypeElement owner)
+        {
+            var serializer = SerializerArgument(attribute) as IDeclaredType;
+            if (serializer?.GetTypeElement()?.ShortName != ConstantSerializer)
+                return null;
+
+            var tag = (LastTypeArgument(serializer) as IDeclaredType)?.GetTypeElement();
+            if (tag == null)
+                return null;
+
+            List<IEnum> candidates;
+            using (CompilationContextCookie.GetExplicitUniversalContextIfNotSet())
+            {
+                var scope = owner.GetPsiServices().Symbols
+                    .GetSymbolScope(LibrarySymbolScope.FULL, caseSensitive: true);
+                candidates = scope.GetElementsByShortName(tag.ShortName).OfType<IEnum>().ToList();
+            }
+
+            foreach (var candidate in candidates)
+            {
+                var marker = FindAttribute(candidate.GetDeclarations(), it => it == ConstantsForAttribute);
+                if (marker == null && !HasAttribute(candidate, ConstantsForAttribute))
+                    continue;
+
+                var argument = (SerializerArgument(marker) as IDeclaredType)?.GetTypeElement();
+                if (argument != null && !Equals(argument.GetClrName(), tag.GetClrName()))
+                    continue;
+
+                var members = candidate.EnumMembers
+                    .Where(it => it.IsEnumMember)
+                    .Select(it => it.ShortName)
+                    .ToList();
+                if (members.Count > 0)
+                    return members;
+            }
+
+            return null;
+        }
+
+        private static bool IsLocalized(IType type, IPsiModule module)
+        {
+            var declared = UnwrapType(type, module).Unlift() as IDeclaredType;
+            return declared?.GetTypeElement()?.ShortName == LocId;
         }
 
         private static string KindOfType(IType type)
@@ -484,6 +547,9 @@ namespace ReSharperPlugin.RobustYaml
         private const string PrototypeAttribute = "Prototype";
         private const string ProtoId = "ProtoId";
         private const string EntProtoId = "EntProtoId";
+        private const string LocId = "LocId";
+        private const string ConstantSerializer = "ConstantSerializer";
+        private const string ConstantsForAttribute = "ConstantsFor";
         private const string EntityKind = "entity";
         private const string DictionarySerializer = "DictionarySerializer";
         private const string ValueDictionarySerializer = "ValueDictionarySerializer";

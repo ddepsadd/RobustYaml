@@ -57,7 +57,7 @@ class RobustYamlConfigurable(private val project: Project) : BoundConfigurable("
     }
 
     override fun apply() {
-        val oldRoots = RobustPrototypeRootsProvider.findPrototypeRoots(project)
+        val oldRoots = RobustPrototypeRootsProvider.indexedRoots(project)
         super.apply()
         RobustPrototypeRootsProvider.rootsChanged(project, oldRoots)
         ProjectView.getInstance(project).refresh()

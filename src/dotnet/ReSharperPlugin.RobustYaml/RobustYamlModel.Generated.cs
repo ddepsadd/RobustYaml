@@ -67,7 +67,7 @@ namespace JetBrains.Rider.Model
     
     
     
-    protected override long SerializationHash => -57370313241853098L;
+    protected override long SerializationHash => -2428411156860904630L;
     
     protected override Action<ISerializers> Register => RegisterDeclaredTypesSerializers;
     public static void RegisterDeclaredTypesSerializers(ISerializers serializers)
@@ -123,6 +123,8 @@ namespace JetBrains.Rider.Model
     [CanBeNull] public string KeyPrototypeKind {get; private set;}
     public bool Dictionary {get; private set;}
     public bool Sequence {get; private set;}
+    public bool CustomSerializer {get; private set;}
+    public bool Localized {get; private set;}
     [NotNull] public List<string> Values {get; private set;}
     [NotNull] public List<string> KeyValues {get; private set;}
     
@@ -136,6 +138,8 @@ namespace JetBrains.Rider.Model
       [CanBeNull] string keyPrototypeKind,
       bool dictionary,
       bool sequence,
+      bool customSerializer,
+      bool localized,
       [NotNull] List<string> values,
       [NotNull] List<string> keyValues
     )
@@ -152,12 +156,14 @@ namespace JetBrains.Rider.Model
       KeyPrototypeKind = keyPrototypeKind;
       Dictionary = dictionary;
       Sequence = sequence;
+      CustomSerializer = customSerializer;
+      Localized = localized;
       Values = values;
       KeyValues = keyValues;
     }
     //secondary constructor
     //deconstruct trait
-    public void Deconstruct([NotNull] out string name, [NotNull] out string type, [CanBeNull] out string summary, [CanBeNull] out string prototypeKind, [CanBeNull] out string keyPrototypeKind, out bool dictionary, out bool sequence, [NotNull] out List<string> values, [NotNull] out List<string> keyValues)
+    public void Deconstruct([NotNull] out string name, [NotNull] out string type, [CanBeNull] out string summary, [CanBeNull] out string prototypeKind, [CanBeNull] out string keyPrototypeKind, out bool dictionary, out bool sequence, out bool customSerializer, out bool localized, [NotNull] out List<string> values, [NotNull] out List<string> keyValues)
     {
       name = Name;
       type = Type;
@@ -166,6 +172,8 @@ namespace JetBrains.Rider.Model
       keyPrototypeKind = KeyPrototypeKind;
       dictionary = Dictionary;
       sequence = Sequence;
+      customSerializer = CustomSerializer;
+      localized = Localized;
       values = Values;
       keyValues = KeyValues;
     }
@@ -180,9 +188,11 @@ namespace JetBrains.Rider.Model
       var keyPrototypeKind = ReadStringNullable(ctx, reader);
       var dictionary = reader.ReadBool();
       var sequence = reader.ReadBool();
+      var customSerializer = reader.ReadBool();
+      var localized = reader.ReadBool();
       var values = ReadStringList(ctx, reader);
       var keyValues = ReadStringList(ctx, reader);
-      var _result = new RobustDataField(name, type, summary, prototypeKind, keyPrototypeKind, dictionary, sequence, values, keyValues);
+      var _result = new RobustDataField(name, type, summary, prototypeKind, keyPrototypeKind, dictionary, sequence, customSerializer, localized, values, keyValues);
       return _result;
     };
     public static CtxReadDelegate<string> ReadStringNullable = JetBrains.Rd.Impl.Serializers.ReadString.NullableClass();
@@ -197,6 +207,8 @@ namespace JetBrains.Rider.Model
       WriteStringNullable(ctx, writer, value.KeyPrototypeKind);
       writer.Write(value.Dictionary);
       writer.Write(value.Sequence);
+      writer.Write(value.CustomSerializer);
+      writer.Write(value.Localized);
       WriteStringList(ctx, writer, value.Values);
       WriteStringList(ctx, writer, value.KeyValues);
     };
@@ -219,7 +231,7 @@ namespace JetBrains.Rider.Model
     {
       if (ReferenceEquals(null, other)) return false;
       if (ReferenceEquals(this, other)) return true;
-      return Name == other.Name && Type == other.Type && Equals(Summary, other.Summary) && Equals(PrototypeKind, other.PrototypeKind) && Equals(KeyPrototypeKind, other.KeyPrototypeKind) && Dictionary == other.Dictionary && Sequence == other.Sequence && Values.SequenceEqual(other.Values) && KeyValues.SequenceEqual(other.KeyValues);
+      return Name == other.Name && Type == other.Type && Equals(Summary, other.Summary) && Equals(PrototypeKind, other.PrototypeKind) && Equals(KeyPrototypeKind, other.KeyPrototypeKind) && Dictionary == other.Dictionary && Sequence == other.Sequence && CustomSerializer == other.CustomSerializer && Localized == other.Localized && Values.SequenceEqual(other.Values) && KeyValues.SequenceEqual(other.KeyValues);
     }
     //hash code trait
     public override int GetHashCode()
@@ -233,6 +245,8 @@ namespace JetBrains.Rider.Model
         hash = hash * 31 + (KeyPrototypeKind != null ? KeyPrototypeKind.GetHashCode() : 0);
         hash = hash * 31 + Dictionary.GetHashCode();
         hash = hash * 31 + Sequence.GetHashCode();
+        hash = hash * 31 + CustomSerializer.GetHashCode();
+        hash = hash * 31 + Localized.GetHashCode();
         hash = hash * 31 + Values.ContentHashCode();
         hash = hash * 31 + KeyValues.ContentHashCode();
         return hash;
@@ -250,6 +264,8 @@ namespace JetBrains.Rider.Model
         printer.Print("keyPrototypeKind = "); KeyPrototypeKind.PrintEx(printer); printer.Println();
         printer.Print("dictionary = "); Dictionary.PrintEx(printer); printer.Println();
         printer.Print("sequence = "); Sequence.PrintEx(printer); printer.Println();
+        printer.Print("customSerializer = "); CustomSerializer.PrintEx(printer); printer.Println();
+        printer.Print("localized = "); Localized.PrintEx(printer); printer.Println();
         printer.Print("values = "); Values.PrintEx(printer); printer.Println();
         printer.Print("keyValues = "); KeyValues.PrintEx(printer); printer.Println();
       }
@@ -266,7 +282,7 @@ namespace JetBrains.Rider.Model
   
   
   /// <summary>
-  /// <p>Generated from: RobustYamlModel.kt:25</p>
+  /// <p>Generated from: RobustYamlModel.kt:27</p>
   /// </summary>
   public sealed class RobustFieldQuery : IPrintable, IEquatable<RobustFieldQuery>
   {
@@ -362,7 +378,7 @@ namespace JetBrains.Rider.Model
   
   
   /// <summary>
-  /// <p>Generated from: RobustYamlModel.kt:30</p>
+  /// <p>Generated from: RobustYamlModel.kt:32</p>
   /// </summary>
   public sealed class RobustFieldsReply : IPrintable, IEquatable<RobustFieldsReply>
   {

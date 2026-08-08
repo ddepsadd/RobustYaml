@@ -75,6 +75,11 @@ object RobustYamlContext {
         return !isPrototypeIdDeclaration(keyValue)
     }
 
+    fun isLocalizationValue(scalar: YAMLScalar): Boolean {
+        val keyValue = owningKey(scalar) ?: return false
+        return RobustValidation.field(keyValue)?.localized == true
+    }
+
     fun owningKey(scalar: YAMLScalar): YAMLKeyValue? =
         when (val parent = scalar.parent) {
             is YAMLKeyValue -> parent.takeIf { it.value === scalar }

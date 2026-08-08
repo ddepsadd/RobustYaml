@@ -35,6 +35,8 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustDataFieldIndex" />
     <fileBasedIndex
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceIndex" />
+    <fileBasedIndex
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleIndex" />
     <localInspection
         language="yaml"
         shortName="RobustUnknownPrototypeId"
@@ -69,6 +71,22 @@
         implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustInvalidScalarValueInspection" />
     <localInspection
         language="yaml"
+        shortName="RobustMissingRequiredField"
+        displayName="Required datafield is not set"
+        groupName="Robust YAML"
+        level="ERROR"
+        enabledByDefault="true"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustMissingRequiredFieldInspection" />
+    <localInspection
+        language="yaml"
+        shortName="RobustUnknownLocalizationId"
+        displayName="Unknown localization message id"
+        groupName="Robust YAML"
+        level="WARNING"
+        enabledByDefault="true"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustUnknownLocalizationIdInspection" />
+    <localInspection
+        language="yaml"
         shortName="RobustUnknownField"
         displayName="Unknown component or prototype field"
         groupName="Robust YAML"
@@ -81,6 +99,8 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustSpriteDocumentationProvider" />
     <platform.backend.documentation.targetProvider
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustTypeDocumentationProvider" />
+    <platform.backend.documentation.targetProvider
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocalizationDocumentationProvider" />
     <psi.referenceContributor
         language="yaml"
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceContributor" />

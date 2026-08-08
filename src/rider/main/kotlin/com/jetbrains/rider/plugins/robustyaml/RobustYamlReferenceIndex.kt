@@ -11,7 +11,7 @@ import com.intellij.util.io.KeyDescriptor
 class RobustYamlReferenceIndex : ScalarIndexExtension<String>() {
     override fun getName(): ID<String, Void> = NAME
 
-    override fun getVersion(): Int = 2
+    override fun getVersion(): Int = 4
 
     override fun dependsOnFileContent(): Boolean = true
 
@@ -41,6 +41,14 @@ class RobustYamlReferenceIndex : ScalarIndexExtension<String>() {
                     """(?:\[([^\]\r\n]*)\]|"?([^\s"#\[\]]+)"?)[ \t]*(?:#.*)?\r?$""",
             )
 
+        private val BLOCK_REFERENCE =
+            Regex(
+                """(?m)^﻿?[ \t]*(parent)[ \t]*:[ \t]*(?:#.*)?\r?\n""" +
+                    """((?:[ \t]*-[ \t]*"?[^\s"#\r\n]+"?[ \t]*(?:#.*)?\r?\n?)+)""",
+            )
+
+        private val BLOCK_ITEM = Regex("""(?m)^[ \t]*-[ \t]*"?([^\s"#\r\n]+)"?""")
+
         private val NON_IDS = setOf("null", "true", "false")
 
         fun references(text: CharSequence): Map<String, Void?> {
@@ -55,6 +63,12 @@ class RobustYamlReferenceIndex : ScalarIndexExtension<String>() {
                 for (id in ids) {
                     val trimmed = id.trim().trim('"')
                     if (looksLikeId(trimmed)) keys[prefix + trimmed] = null
+                }
+            }
+            for (match in BLOCK_REFERENCE.findAll(text)) {
+                for (item in BLOCK_ITEM.findAll(match.groupValues[2])) {
+                    val id = item.groupValues[1].trim()
+                    if (looksLikeId(id)) keys[PARENT_PREFIX + id] = null
                 }
             }
             return keys

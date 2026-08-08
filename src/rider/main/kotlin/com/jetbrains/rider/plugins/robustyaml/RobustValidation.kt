@@ -23,10 +23,24 @@ object RobustValidation {
 
     data class ScalarProblem(val element: YAMLScalar, val message: String)
 
-    private enum class Numeric(val label: String) {
+    private enum class ValueKind(
+        val label: String,
+        val hint: String = "",
+        val arity: Int = 0,
+        val integral: Boolean = false,
+        val thousands: Boolean = false,
+    ) {
         BOOL("a boolean"),
         INTEGER("an integer"),
-        DECIMAL("a number"),
+        DECIMAL("a number", thousands = true),
+        EXACT_DECIMAL("a number"),
+        TIMESPAN("a time span", ": use seconds ('3', '1.5') or a suffix ('30s', '2m', '1.5h')"),
+        COLOR("a color", ": use a hex code ('#4a90d9') or a name ('red')"),
+        ANGLE("an angle", ": use degrees ('90') or radians ('1.57rad')", thousands = true),
+        VECTOR2("a vector", ": use '1.5,2' or '1.5x2'", arity = 2),
+        VECTOR2I("a vector", ": use '1,2' or '1x2'", arity = 2, integral = true),
+        VECTOR3("a vector", ": use '1,2,3'", arity = 3),
+        VECTOR4("a vector", ": use '1,2,3,4'", arity = 4),
     }
 
     fun unknownField(keyValue: YAMLKeyValue): UnknownField? {
@@ -75,6 +89,34 @@ object RobustValidation {
         return problems
     }
 
+    fun localizationIds(keyValue: YAMLKeyValue): List<ScalarProblem> {
+        val field = typedField(keyValue) ?: return emptyList()
+        if (!field.localized) return emptyList()
+
+        val project = keyValue.project
+        if (!RobustLocalization.hasAnyMessage(project)) return emptyList()
+
+        return when (val value = keyValue.value) {
+            is YAMLSequence ->
+                value.items.mapNotNull { item ->
+                    (item.value as? YAMLScalar)?.let { checkMessage(project, it) }
+                }
+            is YAMLScalar -> listOfNotNull(checkMessage(project, value))
+            else -> emptyList()
+        }
+    }
+
+    private fun checkMessage(project: Project, element: YAMLScalar): ScalarProblem? {
+        val raw = element.textValue.trim()
+        if (raw.isEmpty() || raw.first() in NON_VALUES) return null
+
+        val id = RobustLocalization.messageId(raw)
+        if (!RobustLocalization.looksLikeMessageId(id)) return null
+        if (RobustLocalization.hasMessage(project, id)) return null
+
+        return ScalarProblem(element, "No localization message with id '$id'")
+    }
+
     fun enumValues(keyValue: YAMLKeyValue): List<EnumProblem> {
         val field = typedField(keyValue) ?: return emptyList()
         if (field.values.isEmpty() && field.keyValues.isEmpty()) return emptyList()
@@ -100,6 +142,7 @@ object RobustValidation {
 
     fun scalarValues(keyValue: YAMLKeyValue): List<ScalarProblem> {
         val field = typedField(keyValue) ?: return emptyList()
+        if (field.customSerializer) return emptyList()
         val kind = PRIMITIVES[field.type.removeSuffix("?")] ?: return emptyList()
 
         return when (val value = keyValue.value) {
@@ -110,26 +153,72 @@ object RobustValidation {
         }
     }
 
-    private fun checkScalar(kind: Numeric, element: YAMLScalar): ScalarProblem? {
+    private fun checkScalar(kind: ValueKind, element: YAMLScalar): ScalarProblem? {
         val raw = element.textValue.trim()
         if (raw.isEmpty()) return ScalarProblem(element, "Empty value where ${kind.label} is expected")
         if (raw.first() in NON_VALUES) return null
 
-        val valid = when (kind) {
-            Numeric.BOOL -> raw.equals("true", ignoreCase = true) || raw.equals("false", ignoreCase = true)
-            Numeric.INTEGER -> raw.toLongOrNull() != null || raw.toULongOrNull() != null
-            Numeric.DECIMAL -> raw.replace(",", "").toDoubleOrNull() != null
+        if (!isValid(kind, raw)) {
+            val hint =
+                if (kind == ValueKind.EXACT_DECIMAL && raw.contains(',')) COMMA_HINT else kind.hint
+            return ScalarProblem(element, "'$raw' is not ${kind.label}$hint")
         }
-        if (!valid) return ScalarProblem(element, "'$raw' is not ${kind.label}")
 
-        if (kind == Numeric.DECIMAL && raw.contains(',')) {
-            val parsed = raw.replace(",", "").toDoubleOrNull()
+        val number = if (kind == ValueKind.ANGLE) degrees(raw) else raw
+        if (kind.thousands && number.contains(',')) {
+            val parsed = number.replace(",", "").toDoubleOrNull()
             return ScalarProblem(
                 element,
                 "'$raw' is read as $parsed: a comma separates thousands here, not decimals",
             )
         }
         return null
+    }
+
+    fun isColorField(field: RobustDataField): Boolean =
+        !field.customSerializer && PRIMITIVES[field.type.removeSuffix("?")] == ValueKind.COLOR
+
+    fun colorNames(): List<String> = NAMED_COLORS
+
+    fun accepts(type: String, raw: String): Boolean? {
+        val kind = PRIMITIVES[type.removeSuffix("?")] ?: return null
+        return isValid(kind, raw.trim())
+    }
+
+    private fun isValid(kind: ValueKind, raw: String): Boolean = when (kind) {
+        ValueKind.BOOL -> raw.equals("true", ignoreCase = true) || raw.equals("false", ignoreCase = true)
+        ValueKind.INTEGER -> INTEGER_FORM.matches(raw)
+        ValueKind.DECIMAL -> DECIMAL_FORM.matches(raw.replace(",", ""))
+        ValueKind.EXACT_DECIMAL -> raw == MAX_VALUE || DECIMAL_FORM.matches(raw)
+        ValueKind.TIMESPAN -> isTimeSpan(raw)
+        ValueKind.COLOR -> isColor(raw)
+        ValueKind.ANGLE -> DECIMAL_FORM.matches(degrees(raw).replace(",", ""))
+        else -> isVector(kind, raw)
+    }
+
+    private fun isColor(raw: String): Boolean {
+        if (raw.first() != '#') return raw.lowercase() in NAMED_COLOR_SET
+        val digits = raw.substring(1)
+        return digits.length in HEX_DIGITS && digits.all { Character.digit(it, 16) >= 0 }
+    }
+
+    private fun isVector(kind: ValueKind, raw: String): Boolean {
+        val parts = VECTOR_SEPARATORS
+            .map { raw.split(it) }
+            .firstOrNull { it.size == kind.arity }
+            ?: return false
+        val form = if (kind.integral) INTEGER_FORM else DECIMAL_FORM
+        return parts.all { form.matches(it.trim()) }
+    }
+
+    private fun degrees(raw: String): String =
+        if (raw.endsWith(RADIANS)) raw.dropLast(RADIANS.length).trim() else raw
+
+    private fun isTimeSpan(raw: String): Boolean {
+        if (raw.any { it == ',' || it == ' ' || it == ':' }) return false
+        if (DECIMAL_FORM.matches(raw)) return true
+        if (raw.length <= 1 || raw.last().lowercaseChar() !in TIME_UNITS) return false
+        return DECIMAL_FORM.matches(raw.dropLast(1))
     }
 
     private fun checkEnum(values: List<String>, element: YAMLScalar, raw: String): EnumProblem? {
@@ -280,19 +369,58 @@ object RobustValidation {
     private val NON_VALUES = setOf('!', '*', '&')
 
     private val PRIMITIVES = mapOf(
-        "bool" to Numeric.BOOL,
-        "byte" to Numeric.INTEGER,
-        "sbyte" to Numeric.INTEGER,
-        "short" to Numeric.INTEGER,
-        "ushort" to Numeric.INTEGER,
-        "int" to Numeric.INTEGER,
-        "uint" to Numeric.INTEGER,
-        "long" to Numeric.INTEGER,
-        "ulong" to Numeric.INTEGER,
-        "float" to Numeric.DECIMAL,
-        "double" to Numeric.DECIMAL,
-        "decimal" to Numeric.DECIMAL,
+        "bool" to ValueKind.BOOL,
+        "byte" to ValueKind.INTEGER,
+        "sbyte" to ValueKind.INTEGER,
+        "short" to ValueKind.INTEGER,
+        "ushort" to ValueKind.INTEGER,
+        "int" to ValueKind.INTEGER,
+        "uint" to ValueKind.INTEGER,
+        "long" to ValueKind.INTEGER,
+        "ulong" to ValueKind.INTEGER,
+        "float" to ValueKind.DECIMAL,
+        "double" to ValueKind.DECIMAL,
+        "decimal" to ValueKind.DECIMAL,
+        "TimeSpan" to ValueKind.TIMESPAN,
+        "FixedPoint2" to ValueKind.EXACT_DECIMAL,
+        "Color" to ValueKind.COLOR,
+        "Angle" to ValueKind.ANGLE,
+        "Vector2" to ValueKind.VECTOR2,
+        "Vector2i" to ValueKind.VECTOR2I,
+        "Vector3" to ValueKind.VECTOR3,
+        "Vector4" to ValueKind.VECTOR4,
     )
+
+    private const val MAX_VALUE = "MaxValue"
+    private const val RADIANS = "rad"
+    private const val COMMA_HINT = ": a comma is not a decimal separator here"
+    private val HEX_DIGITS = setOf(3, 4, 6, 8)
+    private val VECTOR_SEPARATORS = listOf(',', 'x')
+    private val TIME_UNITS = setOf('s', 'm', 'h')
+    private val INTEGER_FORM = Regex("""[+-]?\d+""")
+    private val DECIMAL_FORM = Regex("""[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?""")
     private const val LISTED_VALUES = 8
     private val NON_IDS = setOf("null", "true", "false")
+
+    private val NAMED_COLORS: List<String> = (
+        "transparent aliceblue antiquewhite aqua aquamarine azure beige betterviolet bisque black " +
+            "blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral " +
+            "cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen " +
+            "darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen " +
+            "darkslateblue darkslategray darkturquoise darkviolet deeppink deepskyblue dimgray dodgerblue " +
+            "firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green " +
+            "greenyellow honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen " +
+            "lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgreen lightgray " +
+            "lightpink lightsalmon lightseagreen lightskyblue lightslategray lightsteelblue lightyellow " +
+            "lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple " +
+            "mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred " +
+            "midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange " +
+            "orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff " +
+            "peru pink plum powderblue purple red rosybrown royalblue ruber saddlebrown salmon " +
+            "sandybrown seablue seagreen seashell sienna silver skyblue slateblue slategray snow " +
+            "springgreen steelblue tan teal thistle tomato turquoise violet vividgamboge wheat white " +
+            "whitesmoke yellow yellowgreen"
+        ).split(' ')
+
+    private val NAMED_COLOR_SET = NAMED_COLORS.toSet()
 }
