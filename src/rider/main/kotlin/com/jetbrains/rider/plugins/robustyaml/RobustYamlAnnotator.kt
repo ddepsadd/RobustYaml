@@ -19,6 +19,7 @@ class RobustYamlAnnotator : Annotator {
                     reportDuplicateId(element, holder)
                     reportPrototypeIdValues(element, holder)
                     reportEnumValues(element, holder)
+                    reportScalarValues(element, holder)
                 }
             }
             is YAMLScalar -> {
@@ -50,8 +51,10 @@ class RobustYamlAnnotator : Annotator {
 
     private fun reportPrototypeIdValues(keyValue: YAMLKeyValue, holder: AnnotationHolder) {
         for (problem in RobustValidation.prototypeIdValues(keyValue)) {
-            var builder = holder.newAnnotation(HighlightSeverity.ERROR, problem.message)
+            val severity = if (problem.critical) HighlightSeverity.ERROR else HighlightSeverity.WARNING
+            var builder = holder.newAnnotation(severity, problem.message)
                 .range(problem.element)
+            if (!problem.critical) builder = builder.enforcedTextAttributes(RobustYamlColors.waveAttributes(false))
             for (suggestion in problem.suggestions) {
                 builder = builder.withFix(ChangePrototypeIdFix(problem.element, suggestion))
             }
@@ -70,9 +73,26 @@ class RobustYamlAnnotator : Annotator {
         }
     }
 
+    private fun reportScalarValues(keyValue: YAMLKeyValue, holder: AnnotationHolder) {
+        for (problem in RobustValidation.scalarValues(keyValue)) {
+            holder.newAnnotation(HighlightSeverity.ERROR, problem.message)
+                .range(problem.element)
+                .create()
+        }
+    }
+
     private fun reportUnknownPrototypeId(scalar: YAMLScalar, holder: AnnotationHolder) {
-        val message = RobustValidation.unknownPrototypeId(scalar) ?: return
-        holder.newAnnotation(HighlightSeverity.ERROR, message).range(scalar).create()
+        val problem = RobustValidation.unknownPrototypeId(scalar) ?: return
+        val severity = if (problem.critical) HighlightSeverity.ERROR else HighlightSeverity.WARNING
+
+        var builder = holder.newAnnotation(severity, problem.message).range(scalar)
+        if (!problem.critical) {
+            builder = builder.enforcedTextAttributes(RobustYamlColors.waveAttributes(false))
+        }
+        for (suggestion in problem.suggestions) {
+            builder = builder.withFix(ChangePrototypeIdFix(scalar, suggestion))
+        }
+        builder.create()
     }
 
     private fun annotateScalar(scalar: YAMLScalar, holder: AnnotationHolder) {

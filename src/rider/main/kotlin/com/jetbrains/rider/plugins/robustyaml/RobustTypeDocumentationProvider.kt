@@ -56,7 +56,15 @@ class RobustTypeDocumentationProvider : DocumentationTargetProvider {
         val source = when {
             RobustYamlContext.isComponentTypeKey(keyValue) ->
                 RobustComponentIndex.findComponentFile(project, name)
-                    ?.let { it to listOf("${name}Component", "Shared${name}Component", name) }
+                    ?.let {
+                        it to listOf(
+                            "${name}Component",
+                            "Shared${name}Component",
+                            "Client${name}Component",
+                            "Server${name}Component",
+                            name,
+                        )
+                    }
             RobustYamlContext.isPrototypeKindKey(keyValue) ->
                 RobustPrototypeIndex.findKindFile(project, name)
                     ?.let { it to listOf("${name.replaceFirstChar(Char::uppercase)}Prototype", name) }

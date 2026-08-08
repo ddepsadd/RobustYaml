@@ -15,6 +15,10 @@
                implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustYamlAnnotator" />
     <additionalLibraryRootsProvider
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeRootsProvider" />
+    <solutionExplorerRootProvider
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeTreeRoot" />
+    <solutionExplorerCustomization
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustSolutionExplorerProblems" />
     <colorSettingsPage
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlColorSettingsPage" />
     <colorProvider
@@ -29,12 +33,14 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeIdsByKindIndex" />
     <fileBasedIndex
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustDataFieldIndex" />
+    <fileBasedIndex
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceIndex" />
     <localInspection
         language="yaml"
         shortName="RobustUnknownPrototypeId"
         displayName="Unknown prototype id"
         groupName="Robust YAML"
-        level="ERROR"
+        level="WARNING"
         enabledByDefault="true"
         implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustUnknownPrototypeIdInspection" />
     <localInspection
@@ -53,6 +59,14 @@
         level="ERROR"
         enabledByDefault="true"
         implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustInvalidEnumValueInspection" />
+    <localInspection
+        language="yaml"
+        shortName="RobustInvalidScalarValue"
+        displayName="Invalid number or boolean value"
+        groupName="Robust YAML"
+        level="ERROR"
+        enabledByDefault="true"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustInvalidScalarValueInspection" />
     <localInspection
         language="yaml"
         shortName="RobustUnknownField"

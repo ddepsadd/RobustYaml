@@ -1,5 +1,6 @@
 package com.jetbrains.rider.plugins.robustyaml
 
+import com.intellij.ide.projectView.ProjectView
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
@@ -18,6 +19,16 @@ class RobustYamlConfigurable(private val project: Project) : BoundConfigurable("
             checkBox("Detect prototype directories automatically")
                 .bindSelected(state::autoDetect)
                 .comment("Looks for a Prototypes directory inside any top-level project directory.")
+        }
+        row {
+            checkBox("Show prototypes in Solution Explorer")
+                .bindSelected(state::showPrototypeRoot)
+                .comment("Adds a Robust Prototypes root, so prototype files stay visible without Show All Files.")
+        }
+        row {
+            checkBox("Highlight files with unknown components or ids")
+                .bindSelected(state::highlightProblemFiles)
+                .comment("Marks prototype files red in the tree when a component name or prototype id is not found.")
         }
         row {
             checkBox("Align sequence dash with its key")
@@ -49,5 +60,6 @@ class RobustYamlConfigurable(private val project: Project) : BoundConfigurable("
         val oldRoots = RobustPrototypeRootsProvider.findPrototypeRoots(project)
         super.apply()
         RobustPrototypeRootsProvider.rootsChanged(project, oldRoots)
+        ProjectView.getInstance(project).refresh()
     }
 }

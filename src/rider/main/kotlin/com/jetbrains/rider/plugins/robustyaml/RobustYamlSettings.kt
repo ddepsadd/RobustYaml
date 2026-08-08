@@ -12,6 +12,8 @@ class RobustYamlState : BaseState() {
     var autoDetect by property(true)
     var customRoots by list<String>()
     var alignSequenceDash by property(true)
+    var showPrototypeRoot by property(true)
+    var highlightProblemFiles by property(true)
 }
 
 @Service(Service.Level.PROJECT)

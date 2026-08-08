@@ -14,7 +14,7 @@ private class ClassScope(val name: String, val start: Int, val end: Int, val dep
 class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
     override fun getName(): ID<String, String> = NAME
 
-    override fun getVersion(): Int = 5
+    override fun getVersion(): Int = 6
 
     override fun dependsOnFileContent(): Boolean = true
 
@@ -110,7 +110,7 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
             for ((_, match) in classes) {
                 val name = className(match)
                 if (registered && name.endsWith(COMPONENT_SUFFIX)) {
-                    result[COMPONENT_KEY + name.removeSuffix(COMPONENT_SUFFIX)] = name
+                    result[COMPONENT_KEY + RobustComponentNameIndex.protoName(name)] = name
                 }
             }
             for (proto in PROTO_NAME.findAll(text)) {

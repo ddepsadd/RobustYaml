@@ -13,8 +13,11 @@ class RobustUnknownPrototypeIdInspection : LocalInspectionTool() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor =
         object : YamlPsiElementVisitor() {
             override fun visitScalar(scalar: YAMLScalar) {
-                val message = RobustValidation.unknownPrototypeId(scalar) ?: return
-                holder.registerProblem(scalar, message, ProblemHighlightType.GENERIC_ERROR_OR_WARNING)
+                val problem = RobustValidation.unknownPrototypeId(scalar) ?: return
+                val fixes = problem.suggestions
+                    .map { ChangePrototypeIdFix(scalar, it) as LocalQuickFix }
+                    .toTypedArray()
+                holder.registerProblem(scalar, problem.message, highlightOf(problem.critical), *fixes)
             }
 
             override fun visitKeyValue(keyValue: YAMLKeyValue) {
@@ -25,10 +28,13 @@ class RobustUnknownPrototypeIdInspection : LocalInspectionTool() {
                     holder.registerProblem(
                         problem.element,
                         problem.message,
-                        ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
+                        highlightOf(problem.critical),
                         *fixes,
                     )
                 }
             }
+
+            private fun highlightOf(critical: Boolean): ProblemHighlightType =
+                if (critical) ProblemHighlightType.GENERIC_ERROR else ProblemHighlightType.WARNING
         }
 }

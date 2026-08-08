@@ -12,9 +12,22 @@ import org.jetbrains.yaml.psi.YAMLSequence
 object RobustValidation {
     data class UnknownField(val message: String, val suggestions: List<String>)
 
-    data class IdProblem(val element: YAMLScalar, val message: String, val suggestions: List<String>)
+    data class IdProblem(
+        val element: YAMLScalar,
+        val message: String,
+        val suggestions: List<String>,
+        val critical: Boolean,
+    )
 
     data class EnumProblem(val element: YAMLScalar, val message: String, val suggestions: List<String>)
+
+    data class ScalarProblem(val element: YAMLScalar, val message: String)
+
+    private enum class Numeric(val label: String) {
+        BOOL("a boolean"),
+        INTEGER("an integer"),
+        DECIMAL("a number"),
+    }
 
     fun unknownField(keyValue: YAMLKeyValue): UnknownField? {
         val name = keyValue.keyText
@@ -42,20 +55,21 @@ object RobustValidation {
         val project = keyValue.project
         if (!RobustPrototypeIndex.hasAnyId(project)) return emptyList()
 
+        val critical = keyValue.keyText == PARENT_KEY
         val problems = mutableListOf<IdProblem>()
         when (val value = keyValue.value) {
             is YAMLMapping ->
                 for (entry in value.keyValues) {
                     val key = entry.key as? YAMLScalar ?: continue
-                    check(project, field.keyPrototypeKind, key, entry.keyText)?.let { problems += it }
+                    check(project, field.keyPrototypeKind, key, entry.keyText, critical)?.let { problems += it }
                 }
             is YAMLSequence ->
                 for (item in value.items) {
                     val scalar = item.value as? YAMLScalar ?: continue
-                    check(project, field.prototypeKind, scalar, scalar.textValue)?.let { problems += it }
+                    check(project, field.prototypeKind, scalar, scalar.textValue, critical)?.let { problems += it }
                 }
             is YAMLScalar ->
-                check(project, field.prototypeKind, value, value.textValue)?.let { problems += it }
+                check(project, field.prototypeKind, value, value.textValue, critical)?.let { problems += it }
             else -> {}
         }
         return problems
@@ -84,6 +98,40 @@ object RobustValidation {
         return problems
     }
 
+    fun scalarValues(keyValue: YAMLKeyValue): List<ScalarProblem> {
+        val field = typedField(keyValue) ?: return emptyList()
+        val kind = PRIMITIVES[field.type.removeSuffix("?")] ?: return emptyList()
+
+        return when (val value = keyValue.value) {
+            is YAMLSequence ->
+                value.items.mapNotNull { item -> (item.value as? YAMLScalar)?.let { checkScalar(kind, it) } }
+            is YAMLScalar -> listOfNotNull(checkScalar(kind, value))
+            else -> emptyList()
+        }
+    }
+
+    private fun checkScalar(kind: Numeric, element: YAMLScalar): ScalarProblem? {
+        val raw = element.textValue.trim()
+        if (raw.isEmpty()) return ScalarProblem(element, "Empty value where ${kind.label} is expected")
+        if (raw.first() in NON_VALUES) return null
+
+        val valid = when (kind) {
+            Numeric.BOOL -> raw.equals("true", ignoreCase = true) || raw.equals("false", ignoreCase = true)
+            Numeric.INTEGER -> raw.toLongOrNull() != null || raw.toULongOrNull() != null
+            Numeric.DECIMAL -> raw.replace(",", "").toDoubleOrNull() != null
+        }
+        if (!valid) return ScalarProblem(element, "'$raw' is not ${kind.label}")
+
+        if (kind == Numeric.DECIMAL && raw.contains(',')) {
+            val parsed = raw.replace(",", "").toDoubleOrNull()
+            return ScalarProblem(
+                element,
+                "'$raw' is read as $parsed: a comma separates thousands here, not decimals",
+            )
+        }
+        return null
+    }
+
     private fun checkEnum(values: List<String>, element: YAMLScalar, raw: String): EnumProblem? {
         if (values.isEmpty()) return null
 
@@ -109,7 +157,13 @@ object RobustValidation {
         return text.all { it.isLetterOrDigit() || it == '_' }
     }
 
-    private fun check(project: Project, kind: String?, element: YAMLScalar, raw: String): IdProblem? {
+    private fun check(
+        project: Project,
+        kind: String?,
+        element: YAMLScalar,
+        raw: String,
+        critical: Boolean,
+    ): IdProblem? {
         if (kind == null) return null
 
         val id = raw.trim()
@@ -118,11 +172,20 @@ object RobustValidation {
         val kinds = RobustPrototypeIndex.sites(project, id).mapTo(mutableSetOf()) { it.kind }
         if (kind in kinds) return null
 
-        val message =
-            if (kinds.isEmpty()) "Unknown $kind prototype '$id'"
-            else "'$id' is ${kinds.sorted().joinToString("', '", "'", "'")}, expected '$kind'"
-        return IdProblem(element, message, ChangePrototypeIdFix.suggest(project, id, kind))
+        val renamed = RobustMigrations.renamedTo(project, id)
+        val message = when {
+            renamed != null -> "'$id' was renamed to '$renamed' by migration.yml"
+            RobustMigrations.isRemoved(project, id) -> "'$id' was removed by migration.yml"
+            kinds.isEmpty() -> "Unknown $kind prototype '$id'"
+            else -> "'$id' is ${kinds.sorted().joinToString("', '", "'", "'")}, expected '$kind'"
+        }
+        val suggestions =
+            (listOfNotNull(renamed) + ChangePrototypeIdFix.suggest(project, id, kind)).distinct()
+        return IdProblem(element, message, suggestions, critical)
     }
+
+    fun isParentReference(element: PsiElement): Boolean =
+        PsiTreeUtil.getParentOfType(element, YAMLKeyValue::class.java, false)?.keyText == PARENT_KEY
 
     fun expectedKind(scalar: YAMLScalar): String? {
         val parent = scalar.parent
@@ -161,7 +224,7 @@ object RobustValidation {
         return RobustBackend.getInstance(project).cachedField(root, path, name)
     }
 
-    fun unknownPrototypeId(scalar: YAMLScalar): String? {
+    fun unknownPrototypeId(scalar: YAMLScalar): IdProblem? {
         if (!RobustYamlContext.isValidatedPrototypeIdReference(scalar)) return null
 
         val owner = PsiTreeUtil.getParentOfType(scalar, YAMLKeyValue::class.java, false)
@@ -173,7 +236,14 @@ object RobustValidation {
         val project = scalar.project
         if (!RobustPrototypeIndex.hasAnyId(project)) return null
         if (RobustPrototypeIndex.isKnownId(project, id)) return null
-        return "Unknown prototype id '$id'"
+
+        val renamed = RobustMigrations.renamedTo(project, id)
+        val message = when {
+            renamed != null -> "'$id' was renamed to '$renamed' by migration.yml"
+            RobustMigrations.isRemoved(project, id) -> "'$id' was removed by migration.yml"
+            else -> "Unknown prototype id '$id'"
+        }
+        return IdProblem(scalar, message, listOfNotNull(renamed), isParentReference(scalar))
     }
 
     fun duplicateId(keyValue: YAMLKeyValue): String? {
@@ -205,6 +275,24 @@ object RobustValidation {
     }
 
     private const val TYPE_KEY = "type"
+    private const val PARENT_KEY = "parent"
+
+    private val NON_VALUES = setOf('!', '*', '&')
+
+    private val PRIMITIVES = mapOf(
+        "bool" to Numeric.BOOL,
+        "byte" to Numeric.INTEGER,
+        "sbyte" to Numeric.INTEGER,
+        "short" to Numeric.INTEGER,
+        "ushort" to Numeric.INTEGER,
+        "int" to Numeric.INTEGER,
+        "uint" to Numeric.INTEGER,
+        "long" to Numeric.INTEGER,
+        "ulong" to Numeric.INTEGER,
+        "float" to Numeric.DECIMAL,
+        "double" to Numeric.DECIMAL,
+        "decimal" to Numeric.DECIMAL,
+    )
     private const val LISTED_VALUES = 8
     private val NON_IDS = setOf("null", "true", "false")
 }

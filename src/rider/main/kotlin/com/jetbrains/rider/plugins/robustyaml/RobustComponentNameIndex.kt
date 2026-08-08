@@ -11,7 +11,7 @@ import com.intellij.util.io.KeyDescriptor
 class RobustComponentNameIndex : ScalarIndexExtension<String>() {
     override fun getName(): ID<String, Void> = NAME
 
-    override fun getVersion(): Int = 3
+    override fun getVersion(): Int = 4
 
     override fun dependsOnFileContent(): Boolean = true
 
@@ -37,10 +37,20 @@ class RobustComponentNameIndex : ScalarIndexExtension<String>() {
             PROTO_NAME.findAll(text).forEach { names += it.groupValues[1] }
             if (text.contains(REGISTER_MARKER)) {
                 for (match in COMPONENT_CLASS.findAll(text)) {
-                    if (!match.groupValues[1].contains("abstract")) names += match.groupValues[2]
+                    if (!match.groupValues[1].contains("abstract")) names += protoName(match.groupValues[2])
                 }
             }
             return names
         }
+
+        fun protoName(className: String): String {
+            val name = className.removeSuffix(COMPONENT_SUFFIX)
+            val prefix = SIDE_PREFIXES.firstOrNull { name.startsWith(it) && name.length > it.length }
+            return if (prefix == null) name else name.removePrefix(prefix)
+        }
+
+        private const val COMPONENT_SUFFIX = "Component"
+
+        private val SIDE_PREFIXES = listOf("Client", "Server", "Shared")
     }
 }
