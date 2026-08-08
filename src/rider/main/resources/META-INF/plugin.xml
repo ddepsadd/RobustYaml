@@ -117,6 +117,8 @@
         language="yaml"
         order="first"
         implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustComponentCompletionContributor" />
+    <lookup.charFilter
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLookupCharFilter" />
     <projectConfigurable
         id="com.jetbrains.rider.plugins.robustyaml.settings"
         parentId="tools"

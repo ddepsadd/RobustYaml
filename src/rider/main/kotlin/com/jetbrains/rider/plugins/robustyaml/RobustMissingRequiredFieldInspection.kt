@@ -18,6 +18,7 @@ class RobustMissingRequiredFieldInspection : LocalInspectionTool() {
                     keyValue.value ?: keyValue,
                     RobustRequiredFields.message(keyValue, missing),
                     ProblemHighlightType.GENERIC_ERROR,
+                    AddRequiredFieldsFix(keyValue, missing),
                 )
             }
         }

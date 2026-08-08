@@ -21,7 +21,11 @@ object RobustValidation {
 
     data class EnumProblem(val element: YAMLScalar, val message: String, val suggestions: List<String>)
 
-    data class ScalarProblem(val element: YAMLScalar, val message: String)
+    data class ScalarProblem(
+        val element: YAMLScalar,
+        val message: String,
+        val suggestions: List<String> = emptyList(),
+    )
 
     private enum class ValueKind(
         val label: String,
@@ -114,7 +118,11 @@ object RobustValidation {
         if (!RobustLocalization.looksLikeMessageId(id)) return null
         if (RobustLocalization.hasMessage(project, id)) return null
 
-        return ScalarProblem(element, "No localization message with id '$id'")
+        return ScalarProblem(
+            element,
+            "No localization message with id '$id'",
+            ChangeLocalizationIdFix.suggest(project, id),
+        )
     }
 
     fun enumValues(keyValue: YAMLKeyValue): List<EnumProblem> {

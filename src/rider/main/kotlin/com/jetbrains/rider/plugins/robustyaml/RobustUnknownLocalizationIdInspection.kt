@@ -16,6 +16,9 @@ class RobustUnknownLocalizationIdInspection : LocalInspectionTool() {
                         problem.element,
                         problem.message,
                         ProblemHighlightType.WARNING,
+                        *problem.suggestions
+                            .map { ChangeLocalizationIdFix(problem.element, it) }
+                            .toTypedArray(),
                     )
                 }
             }

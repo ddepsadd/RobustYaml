@@ -81,6 +81,7 @@ class RobustYamlAnnotator : Annotator {
 
         holder.newAnnotation(HighlightSeverity.ERROR, RobustRequiredFields.message(keyValue, missing))
             .range(keyValue.value ?: keyValue)
+            .withFix(AddRequiredFieldsFix(keyValue, missing))
             .create()
     }
 
@@ -94,10 +95,13 @@ class RobustYamlAnnotator : Annotator {
 
     private fun reportLocalizationIds(keyValue: YAMLKeyValue, holder: AnnotationHolder) {
         for (problem in RobustValidation.localizationIds(keyValue)) {
-            holder.newAnnotation(HighlightSeverity.WARNING, problem.message)
+            var builder = holder.newAnnotation(HighlightSeverity.WARNING, problem.message)
                 .range(problem.element)
                 .enforcedTextAttributes(RobustYamlColors.waveAttributes(false))
-                .create()
+            for (suggestion in problem.suggestions) {
+                builder = builder.withFix(ChangeLocalizationIdFix(problem.element, suggestion))
+            }
+            builder.create()
         }
     }
 
