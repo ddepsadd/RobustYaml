@@ -20,6 +20,7 @@ object RobustYamlModel : Ext(SolutionModel.Solution) {
         field("sequence", PredefinedType.bool)
         field("customSerializer", PredefinedType.bool)
         field("localized", PredefinedType.bool)
+        field("polymorphic", PredefinedType.bool)
         field("values", immutableList(PredefinedType.string))
         field("keyValues", immutableList(PredefinedType.string))
     }
@@ -34,7 +35,13 @@ object RobustYamlModel : Ext(SolutionModel.Solution) {
         field("fields", immutableList(RobustDataField))
     }
 
+    private val RobustImplementationsReply = structdef {
+        field("resolved", PredefinedType.bool)
+        field("names", immutableList(PredefinedType.string))
+    }
+
     init {
         call("typeFields", RobustFieldQuery, RobustFieldsReply)
+        call("typeImplementations", RobustFieldQuery, RobustImplementationsReply)
     }
 }

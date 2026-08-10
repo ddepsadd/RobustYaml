@@ -33,13 +33,17 @@ class RobustTypeDocumentationProvider : DocumentationTargetProvider {
         if (field.isEmpty()) return emptyList()
 
         val declaration = RobustYamlContext.declarationAround(keyValue) ?: return emptyList()
-        val path = RobustYamlContext.pathTo(declaration, keyValue) ?: return emptyList()
+        val origin = RobustYamlContext.originTo(declaration, keyValue) ?: return emptyList()
+        val path = origin.path
 
         val project = keyValue.project
-        val root = RobustDataFields.rootClass(project, declaration) ?: return emptyList()
+        val root = origin.root
+            ?: RobustDataFields.rootClass(project, declaration)
+            ?: return emptyList()
 
-        val owner = if (path.isEmpty()) RobustDataFields.ownerOfField(project, root, field) else null
-        if (path.isEmpty() && owner == null) return emptyList()
+        val direct = origin.root == null && path.isEmpty()
+        val owner = if (direct) RobustDataFields.ownerOfField(project, root, field) else null
+        if (direct && owner == null) return emptyList()
         return listOf(FieldDocumentationTarget(project, owner, field, root, path))
     }
 

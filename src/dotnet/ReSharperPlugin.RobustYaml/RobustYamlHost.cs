@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Application.Parts;
+using JetBrains.Application.Progress;
 using JetBrains.Lifetimes;
 using JetBrains.Metadata.Reader.API;
 using JetBrains.ProjectModel;
@@ -13,6 +14,7 @@ using JetBrains.ReSharper.Psi.Caches;
 using JetBrains.ReSharper.Psi.CSharp.Tree;
 using JetBrains.ReSharper.Psi.Modules;
 using JetBrains.ReSharper.Psi.Resolve;
+using JetBrains.ReSharper.Psi.Search;
 using JetBrains.ReSharper.Psi.Tree;
 using JetBrains.ReSharper.Psi.Util;
 using JetBrains.ReSharper.Resources.Shell;
@@ -28,8 +30,9 @@ namespace ReSharperPlugin.RobustYaml
         public RobustYamlHost(Lifetime lifetime, ISolution solution)
         {
             mySolution = solution;
-            solution.GetProtocolSolution().GetRobustYamlModel().TypeFields
-                .SetSync((_, query) => Fields(query.ClassName, query.Path));
+            var model = solution.GetProtocolSolution().GetRobustYamlModel();
+            model.TypeFields.SetSync((_, query) => Fields(query.ClassName, query.Path));
+            model.TypeImplementations.SetSync((_, query) => Implementations(query.ClassName, query.Path));
         }
 
         private sealed class Field
@@ -136,6 +139,7 @@ namespace ReSharperPlugin.RobustYaml
                         IsSequence(field.Type, type.Module),
                         field.CustomSerializer,
                         IsLocalized(field.Type, type.Module),
+                        IsPolymorphic(field.Type, type.Module),
                         values.Value,
                         values.Key));
                 }
@@ -143,6 +147,114 @@ namespace ReSharperPlugin.RobustYaml
 
             return Resolved(result);
         }
+
+        /// <summary>
+        /// Types a `!type:` tag may name at the end of <paramref name="path"/>. The declared type of
+        /// the field is usually abstract — `IPhysShape`, `IThresholdBehavior` — and the tag picks the
+        /// class that is actually read, so the answer is its inheritors plus itself when it can be
+        /// instantiated.
+        /// </summary>
+        private RobustImplementationsReply Implementations(string className, List<string> path)
+        {
+            using (ReadLockCookie.Create())
+            {
+                var services = mySolution.GetPsiServices();
+
+                List<ITypeElement> candidates;
+                using (CompilationContextCookie.GetExplicitUniversalContextIfNotSet())
+                {
+                    var universal = services.Symbols.GetSymbolScope(LibrarySymbolScope.FULL, caseSensitive: true);
+                    candidates = universal.GetElementsByShortName(className)
+                        .OfType<ITypeElement>()
+                        .OrderBy(it => (it as ITypeMember)?.GetContainingType() == null ? 0 : 1)
+                        .ToList();
+                }
+
+                foreach (var candidate in candidates)
+                {
+                    var reply = ImplementationsOf(candidate, services, path);
+                    if (!reply.Resolved || reply.Names.Count > 0)
+                        return reply;
+                }
+
+                return new RobustImplementationsReply(candidates.Count > 0, new List<string>());
+            }
+        }
+
+        private RobustImplementationsReply ImplementationsOf(
+            ITypeElement found, IPsiServices services, List<string> path)
+        {
+            var context = ResolveContext(found.Module);
+            using (context == null
+                       ? CompilationContextCookie.GetExplicitUniversalContextIfNotSet()
+                       : CompilationContextCookie.GetOrCreate(context))
+            {
+                var scope = services.Symbols.GetSymbolScope(found.Module, true, true);
+                var type = scope.GetTypeElementByCLRName(found.GetClrName()) ?? found;
+
+                var keySegment = false;
+                foreach (var segment in path)
+                {
+                    if (keySegment)
+                    {
+                        keySegment = false;
+                        continue;
+                    }
+
+                    var step = Collect(type).FirstOrDefault(it => it.Name == segment);
+                    if (step == null)
+                        return NoImplementations;
+
+                    if (step.Type.GetPresentableName(type.PresentationLanguage).Contains(Unresolved))
+                        return UnbuiltImplementations;
+
+                    keySegment = IsDictionary(step.Type, type.Module);
+                    type = Unwrap(step.Type, type.Module);
+                    if (type == null)
+                        return NoImplementations;
+                }
+
+                var names = new List<string>();
+                if (Instantiable(type))
+                    names.Add(type.ShortName);
+
+                var domain = SearchDomainFactory.Instance.CreateSearchDomain(mySolution, false);
+                services.Finder.FindInheritors(
+                    TypeFactory.CreateType(type),
+                    inheritor =>
+                    {
+                        var element = inheritor.GetTypeElement();
+                        if (element != null && Instantiable(element))
+                            names.Add(element.ShortName);
+                        return names.Count < InheritorLimit ? FindExecution.Continue : FindExecution.Stop;
+                    },
+                    domain,
+                    NullProgressIndicator.Create());
+
+                // A truncated list would turn a valid tag into an error, so it is reported as
+                // "nothing is known here" instead: validation stays silent and completion offers nothing.
+                if (names.Count >= InheritorLimit)
+                    return NoImplementations;
+
+                return new RobustImplementationsReply(true, names);
+            }
+        }
+
+        private static RobustImplementationsReply NoImplementations =>
+            new RobustImplementationsReply(true, new List<string>());
+
+        private static RobustImplementationsReply UnbuiltImplementations =>
+            new RobustImplementationsReply(false, new List<string>());
+
+        private static bool Instantiable(ITypeElement type)
+        {
+            var klass = type as IClass;
+            if (klass != null)
+                return !klass.IsAbstract;
+            return type is IStruct;
+        }
+
+        private const int InheritorLimit = 500;
 
         private static RobustFieldsReply Resolved(List<RobustDataField> fields) =>
             new RobustFieldsReply(true, fields);
@@ -244,6 +356,13 @@ namespace ReSharperPlugin.RobustYaml
         {
             for (var depth = 0; depth < MaxUnwrap; depth++)
             {
+                var array = type.Unlift() as IArrayType;
+                if (array != null)
+                {
+                    type = array.ElementType;
+                    continue;
+                }
+
                 var declared = type.Unlift() as IDeclaredType;
                 if (declared == null || declared.IsString())
                     return type;
@@ -280,8 +399,32 @@ namespace ReSharperPlugin.RobustYaml
             return values != null && values.Count > 0;
         }
 
+        /// <summary>
+        /// Whether the value of this field is chosen by a `!type:` tag: the declared type cannot be
+        /// instantiated, so the concrete class has to be named in YAML. Asking for inheritors is a
+        /// solution-wide search, and this flag is what keeps the frontend from asking about every
+        /// `float` field it meets.
+        /// </summary>
+        private static bool IsPolymorphic(IType type, IPsiModule module)
+        {
+            var element = Unwrap(type, module);
+            if (element == null)
+                return false;
+
+            if (element is IInterface)
+                return true;
+
+            var klass = element as IClass;
+            return klass != null && klass.IsAbstract;
+        }
+
         private static bool IsSequence(IType type, IPsiModule module)
         {
+            // An array is an IArrayType, never an IDeclaredType, so the cast below drops it and
+            // `vertices: Vector2[]` would be written as a scalar key.
+            if (type.Unlift() is IArrayType)
+                return true;
+
             var declared = type.Unlift() as IDeclaredType;
             if (declared == null || declared.IsString() || IsDictionary(type, module))
                 return false;

@@ -19,7 +19,8 @@ import kotlin.jvm.JvmStatic
  * #### Generated from [RobustYamlModel.kt:11]
  */
 class RobustYamlModel private constructor(
-    private val _typeFields: RdCall<RobustFieldQuery, RobustFieldsReply>
+    private val _typeFields: RdCall<RobustFieldQuery, RobustFieldsReply>,
+    private val _typeImplementations: RdCall<RobustFieldQuery, RobustImplementationsReply>
 ) : RdExtBase() {
     //companion
     
@@ -30,13 +31,14 @@ class RobustYamlModel private constructor(
             serializers.register(LazyCompanionMarshaller(RdId(1879621150234290220), classLoader, "com.jetbrains.rd.ide.model.RobustDataField"))
             serializers.register(LazyCompanionMarshaller(RdId(2928082736417472178), classLoader, "com.jetbrains.rd.ide.model.RobustFieldQuery"))
             serializers.register(LazyCompanionMarshaller(RdId(-1463155538665054867), classLoader, "com.jetbrains.rd.ide.model.RobustFieldsReply"))
+            serializers.register(LazyCompanionMarshaller(RdId(3893400752234452525), classLoader, "com.jetbrains.rd.ide.model.RobustImplementationsReply"))
         }
         
         
         
         
         
-        const val serializationHash = -2428411156860904630L
+        const val serializationHash = 1058776472414428381L
         
     }
     override val serializersOwner: ISerializersOwner get() = RobustYamlModel
@@ -44,16 +46,19 @@ class RobustYamlModel private constructor(
     
     //fields
     val typeFields: IRdCall<RobustFieldQuery, RobustFieldsReply> get() = _typeFields
+    val typeImplementations: IRdCall<RobustFieldQuery, RobustImplementationsReply> get() = _typeImplementations
     //methods
     //initializer
     init {
         bindableChildren.add("typeFields" to _typeFields)
+        bindableChildren.add("typeImplementations" to _typeImplementations)
     }
     
     //secondary constructor
     internal constructor(
     ) : this(
-        RdCall<RobustFieldQuery, RobustFieldsReply>(RobustFieldQuery, RobustFieldsReply)
+        RdCall<RobustFieldQuery, RobustFieldsReply>(RobustFieldQuery, RobustFieldsReply),
+        RdCall<RobustFieldQuery, RobustImplementationsReply>(RobustFieldQuery, RobustImplementationsReply)
     )
     
     //equals trait
@@ -63,13 +68,15 @@ class RobustYamlModel private constructor(
         printer.println("RobustYamlModel (")
         printer.indent {
             print("typeFields = "); _typeFields.print(printer); println()
+            print("typeImplementations = "); _typeImplementations.print(printer); println()
         }
         printer.print(")")
     }
     //deepClone
     override fun deepClone(): RobustYamlModel   {
         return RobustYamlModel(
-            _typeFields.deepClonePolymorphic()
+            _typeFields.deepClonePolymorphic(),
+            _typeImplementations.deepClonePolymorphic()
         )
     }
     //contexts
@@ -93,6 +100,7 @@ data class RobustDataField (
     val sequence: Boolean,
     val customSerializer: Boolean,
     val localized: Boolean,
+    val polymorphic: Boolean,
     val values: List<String>,
     val keyValues: List<String>
 ) : IPrintable {
@@ -113,9 +121,10 @@ data class RobustDataField (
             val sequence = buffer.readBool()
             val customSerializer = buffer.readBool()
             val localized = buffer.readBool()
+            val polymorphic = buffer.readBool()
             val values = buffer.readList { buffer.readString() }
             val keyValues = buffer.readList { buffer.readString() }
-            return RobustDataField(name, type, summary, prototypeKind, keyPrototypeKind, dictionary, sequence, customSerializer, localized, values, keyValues)
+            return RobustDataField(name, type, summary, prototypeKind, keyPrototypeKind, dictionary, sequence, customSerializer, localized, polymorphic, values, keyValues)
         }
         
         override fun write(ctx: SerializationCtx, buffer: AbstractBuffer, value: RobustDataField)  {
@@ -128,6 +137,7 @@ data class RobustDataField (
             buffer.writeBool(value.sequence)
             buffer.writeBool(value.customSerializer)
             buffer.writeBool(value.localized)
+            buffer.writeBool(value.polymorphic)
             buffer.writeList(value.values) { v -> buffer.writeString(v) }
             buffer.writeList(value.keyValues) { v -> buffer.writeString(v) }
         }
@@ -154,6 +164,7 @@ data class RobustDataField (
         if (sequence != other.sequence) return false
         if (customSerializer != other.customSerializer) return false
         if (localized != other.localized) return false
+        if (polymorphic != other.polymorphic) return false
         if (values != other.values) return false
         if (keyValues != other.keyValues) return false
         
@@ -171,6 +182,7 @@ data class RobustDataField (
         __r = __r*31 + sequence.hashCode()
         __r = __r*31 + customSerializer.hashCode()
         __r = __r*31 + localized.hashCode()
+        __r = __r*31 + polymorphic.hashCode()
         __r = __r*31 + values.hashCode()
         __r = __r*31 + keyValues.hashCode()
         return __r
@@ -188,6 +200,7 @@ data class RobustDataField (
             print("sequence = "); sequence.print(printer); println()
             print("customSerializer = "); customSerializer.print(printer); println()
             print("localized = "); localized.print(printer); println()
+            print("polymorphic = "); polymorphic.print(printer); println()
             print("values = "); values.print(printer); println()
             print("keyValues = "); keyValues.print(printer); println()
         }
@@ -200,7 +213,7 @@ data class RobustDataField (
 
 
 /**
- * #### Generated from [RobustYamlModel.kt:27]
+ * #### Generated from [RobustYamlModel.kt:28]
  */
 data class RobustFieldQuery (
     val className: String,
@@ -265,7 +278,7 @@ data class RobustFieldQuery (
 
 
 /**
- * #### Generated from [RobustYamlModel.kt:32]
+ * #### Generated from [RobustYamlModel.kt:33]
  */
 data class RobustFieldsReply (
     val resolved: Boolean,
@@ -320,6 +333,71 @@ data class RobustFieldsReply (
         printer.indent {
             print("resolved = "); resolved.print(printer); println()
             print("fields = "); fields.print(printer); println()
+        }
+        printer.print(")")
+    }
+    //deepClone
+    //contexts
+    //threading
+}
+
+
+/**
+ * #### Generated from [RobustYamlModel.kt:38]
+ */
+data class RobustImplementationsReply (
+    val resolved: Boolean,
+    val names: List<String>
+) : IPrintable {
+    //companion
+    
+    companion object : IMarshaller<RobustImplementationsReply> {
+        override val _type: KClass<RobustImplementationsReply> = RobustImplementationsReply::class
+        override val id: RdId get() = RdId(3893400752234452525)
+        
+        @Suppress("UNCHECKED_CAST")
+        override fun read(ctx: SerializationCtx, buffer: AbstractBuffer): RobustImplementationsReply  {
+            val resolved = buffer.readBool()
+            val names = buffer.readList { buffer.readString() }
+            return RobustImplementationsReply(resolved, names)
+        }
+        
+        override fun write(ctx: SerializationCtx, buffer: AbstractBuffer, value: RobustImplementationsReply)  {
+            buffer.writeBool(value.resolved)
+            buffer.writeList(value.names) { v -> buffer.writeString(v) }
+        }
+        
+        
+    }
+    //fields
+    //methods
+    //initializer
+    //secondary constructor
+    //equals trait
+    override fun equals(other: Any?): Boolean  {
+        if (this === other) return true
+        if (other == null || other::class != this::class) return false
+        
+        other as RobustImplementationsReply
+        
+        if (resolved != other.resolved) return false
+        if (names != other.names) return false
+        
+        return true
+    }
+    //hash code trait
+    override fun hashCode(): Int  {
+        var __r = 0
+        __r = __r*31 + resolved.hashCode()
+        __r = __r*31 + names.hashCode()
+        return __r
+    }
+    //pretty print
+    override fun print(printer: PrettyPrinter)  {
+        printer.println("RobustImplementationsReply (")
+        printer.indent {
+            print("resolved = "); resolved.print(printer); println()
+            print("names = "); names.print(printer); println()
         }
         printer.print(")")
     }

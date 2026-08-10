@@ -2,6 +2,7 @@ package com.jetbrains.rider.plugins.robustyaml
 
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.patterns.PlatformPatterns
 import com.intellij.psi.ElementManipulators
@@ -15,6 +16,7 @@ import com.intellij.psi.PsiReferenceProvider
 import com.intellij.psi.PsiReferenceRegistrar
 import com.intellij.psi.impl.source.resolve.reference.impl.providers.FileReferenceSet
 import com.intellij.util.ProcessingContext
+import org.jetbrains.yaml.psi.YAMLSequenceItem
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLScalar
 
@@ -44,8 +46,49 @@ class RobustYamlReferenceContributor : PsiReferenceContributor() {
             PlatformPatterns.psiElement(YAMLScalar::class.java),
             LocalizationIdReferenceProvider,
         )
+        registrar.registerReferenceProvider(
+            PlatformPatterns.psiElement(YAMLKeyValue::class.java),
+            TypeTagReferenceProvider,
+        )
+        registrar.registerReferenceProvider(
+            PlatformPatterns.psiElement(YAMLSequenceItem::class.java),
+            TypeTagReferenceProvider,
+        )
     }
 }
+
+/**
+ * The tag is a lexer token, and references are collected from elements that own them, so the
+ * provider sits on the carrier and points a range inside it. The range covers the whole tag,
+ * `!type:` included: leaving the prefix out only earned a "Cannot find declaration" popup on it.
+ */
+private object TypeTagReferenceProvider : PsiReferenceProvider() {
+    override fun getReferencesByElement(
+        element: PsiElement,
+        context: ProcessingContext,
+    ): Array<PsiReference> {
+        val tag = RobustYamlContext.tagToken(element) ?: return PsiReference.EMPTY_ARRAY
+        if (tag.textLength <= TYPE_TAG.length) return PsiReference.EMPTY_ARRAY
+
+        val start = tag.textRange.startOffset - element.textRange.startOffset
+        return arrayOf(TypeTagReference(element, TextRange(start, start + tag.textLength)))
+    }
+}
+
+class TypeTagReference(carrier: PsiElement, range: TextRange) :
+    PsiReferenceBase<PsiElement>(carrier, range, true) {
+
+    private val className: String get() = value.removePrefix(TYPE_TAG)
+
+    override fun resolve(): PsiElement? {
+        val name = className.takeIf { it.isNotEmpty() } ?: return null
+        val file = RobustDataFields.declaringFiles(element.project, name).firstOrNull() ?: return null
+        val psi = PsiManager.getInstance(element.project).findFile(file) ?: return null
+        return RobustDeclarationTarget.of(psi, name)
+    }
+}
+
+private const val TYPE_TAG = "!type:"
 
 private object LocalizationIdReferenceProvider : PsiReferenceProvider() {
     override fun getReferencesByElement(

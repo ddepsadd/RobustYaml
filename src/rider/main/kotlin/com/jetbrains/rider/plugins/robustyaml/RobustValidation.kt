@@ -1,13 +1,18 @@
 package com.jetbrains.rider.plugins.robustyaml
 
+import com.intellij.openapi.diagnostic.debug
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
+import com.intellij.util.text.EditDistance
 import com.intellij.psi.util.PsiTreeUtil
 import com.jetbrains.rd.ide.model.RobustDataField
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLMapping
 import org.jetbrains.yaml.psi.YAMLScalar
 import org.jetbrains.yaml.psi.YAMLSequence
+
+private val logger = logger<RobustValidation>()
 
 object RobustValidation {
     data class UnknownField(val message: String, val suggestions: List<String>)
@@ -151,7 +156,7 @@ object RobustValidation {
     fun scalarValues(keyValue: YAMLKeyValue): List<ScalarProblem> {
         val field = typedField(keyValue) ?: return emptyList()
         if (field.customSerializer) return emptyList()
-        val kind = PRIMITIVES[field.type.removeSuffix("?")] ?: return emptyList()
+        val kind = scalarKind(field.type) ?: return emptyList()
 
         return when (val value = keyValue.value) {
             is YAMLSequence ->
@@ -184,14 +189,31 @@ object RobustValidation {
     }
 
     fun isColorField(field: RobustDataField): Boolean =
-        !field.customSerializer && PRIMITIVES[field.type.removeSuffix("?")] == ValueKind.COLOR
+        !field.customSerializer && scalarKind(field.type) == ValueKind.COLOR
 
     fun colorNames(): List<String> = NAMED_COLORS
 
     fun accepts(type: String, raw: String): Boolean? {
-        val kind = PRIMITIVES[type.removeSuffix("?")] ?: return null
+        val kind = scalarKind(type) ?: return null
         return isValid(kind, raw.trim())
     }
+
+    /**
+     * A sequence carries the rules of its element type: `vertices` is `Vector2[]`, and every item of
+     * it is read by the very serializer a bare `Vector2` would use. Anything with more than one type
+     * argument is left alone — a dictionary is a mapping in YAML, not a list of scalars.
+     */
+    private fun scalarKind(type: String): ValueKind? {
+        val declared = type.removeSuffix("?").trim()
+        PRIMITIVES[declared]?.let { return it }
+        if (declared.endsWith("[]")) return scalarKind(declared.dropLast(2))
+
+        val argument = GENERIC.matchEntire(declared)?.groupValues?.get(1) ?: return null
+        if (argument.contains(',')) return null
+        return scalarKind(argument)
+    }
+
+    private val GENERIC = Regex("""[\w.]+<(.+)>""")
 
     private fun isValid(kind: ValueKind, raw: String): Boolean = when (kind) {
         ValueKind.BOOL -> raw.equals("true", ignoreCase = true) || raw.equals("false", ignoreCase = true)
@@ -298,27 +320,81 @@ object RobustValidation {
 
     private fun typedField(keyValue: YAMLKeyValue): RobustDataField? {
         val declaration = RobustYamlContext.declarationAround(keyValue) ?: return null
-        val path = RobustYamlContext.pathTo(declaration, keyValue) ?: return null
-        return fieldAt(keyValue.project, declaration, path, keyValue.keyText)
+        val origin = RobustYamlContext.originTo(declaration, keyValue) ?: return null
+        return fieldAt(keyValue.project, declaration, origin, keyValue.keyText)
     }
 
     fun keyKindAt(element: PsiElement): String? = fieldAround(element)?.keyPrototypeKind
 
     fun fieldAround(element: PsiElement): RobustDataField? {
         val declaration = RobustYamlContext.declarationAround(element) ?: return null
-        val path = RobustYamlContext.pathAt(declaration, element) ?: return null
-        if (path.isEmpty()) return null
-        return fieldAt(element.project, declaration, path.dropLast(1), path.last())
+        val origin = RobustYamlContext.originAt(declaration, element) ?: return null
+        if (origin.path.isEmpty()) return null
+        return fieldAt(element.project, declaration, origin.parent(), origin.path.last())
     }
+
+    /**
+     * Classes the `!type:` tag on [carrier] is allowed to name. The carrier is either a key — the
+     * tag then belongs to the value of that key — or a sequence item, which contributes no segment
+     * of its own, so the field is already the last one on the path.
+     */
+    fun tagTypes(carrier: PsiElement): List<String>? {
+        val declaration = RobustYamlContext.declarationAround(carrier) ?: return null
+        val origin = RobustYamlContext.originAt(declaration, carrier) ?: return null
+
+        val project = carrier.project
+        val root = origin.root ?: RobustDataFields.rootClass(project, declaration) ?: return null
+        val path = if (carrier is YAMLKeyValue) origin.path + carrier.keyText else origin.path
+        if (path.isEmpty()) return null
+
+        return RobustBackend.getInstance(project).cachedImplementations(root, path)
+    }
+
+    /** The field a tag carrier stands for: the key itself, or the field the sequence belongs to. */
+    fun fieldOf(carrier: PsiElement): RobustDataField? {
+        val declaration = RobustYamlContext.declarationAround(carrier) ?: return null
+        val origin = RobustYamlContext.originAt(declaration, carrier) ?: return null
+
+        return when {
+            carrier is YAMLKeyValue -> fieldAt(carrier.project, declaration, origin, carrier.keyText)
+            origin.path.isEmpty() -> null
+            else -> fieldAt(carrier.project, declaration, origin.parent(), origin.path.last())
+        }
+    }
+
+    fun unknownTag(carrier: PsiElement): TagProblem? {
+        val tag = RobustYamlContext.taggedType(carrier) ?: return null
+        if (tag in LOOSE_TYPES) return null
+
+        val allowed = tagTypes(carrier) ?: return null
+        logger.debug { "Tag '$tag': ${allowed.size} allowed, known ${tag in allowed}" }
+        if (allowed.isEmpty() || tag in allowed) return null
+
+        return TagProblem(
+            "Unknown type '$tag' here",
+            allowed.filter { EditDistance.levenshtein(tag, it, false) <= TAG_EDITS }.sorted(),
+        )
+    }
+
+    data class TagProblem(val message: String, val suggestions: List<String>)
+
+    /**
+     * `ReflectionManager.TryLooseGetType` answers these six before it ever looks through the
+     * assemblies, so they name primitives that no class declares — `Bool` is `System.Boolean`.
+     * Searching for an inheritor of them finds nothing, which would paint 157 valid values red.
+     */
+    private val LOOSE_TYPES = setOf("Byte", "Bool", "Double", "SByte", "Single", "String")
+
+    private const val TAG_EDITS = 3
 
     fun fieldAt(
         project: Project,
         declaration: RobustYamlContext.DeclarationContext,
-        path: List<String>,
+        origin: RobustYamlContext.Origin,
         name: String,
     ): RobustDataField? {
-        val root = RobustDataFields.rootClass(project, declaration) ?: return null
-        return RobustBackend.getInstance(project).cachedField(root, path, name)
+        val root = origin.root ?: RobustDataFields.rootClass(project, declaration) ?: return null
+        return RobustBackend.getInstance(project).cachedField(root, origin.path, name)
     }
 
     fun unknownPrototypeId(scalar: YAMLScalar): IdProblem? {

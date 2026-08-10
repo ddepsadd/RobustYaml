@@ -3,6 +3,7 @@ package com.jetbrains.rider.plugins.robustyaml
 import com.intellij.codeInsight.editorActions.TypedHandlerDelegate
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.Caret
@@ -39,14 +40,14 @@ class RobustSequenceIndentHandler : TypedHandlerDelegate() {
 
         val indent = typed.length - 1
         val owner = ownerLine(document, line) ?: return Result.CONTINUE
-        val ownerIndent = indentOf(document, owner)
-        if (indent <= ownerIndent) return Result.CONTINUE
+        val target = sequenceIndent(document, owner, line)
+        if (indent <= target) return Result.CONTINUE
 
         PsiDocumentManager.getInstance(project).commitDocument(document)
         if (!inDeclaration(file, caret - 1)) return Result.CONTINUE
 
-        logger.debug { "Dash moved from indent $indent to $ownerIndent" }
-        document.deleteString(lineStart, lineStart + indent - ownerIndent)
+        logger.debug { "Dash moved from indent $indent to $target" }
+        document.deleteString(lineStart, lineStart + indent - target)
         return Result.CONTINUE
     }
 }
@@ -68,24 +69,50 @@ class RobustSequenceEnterHandler(private val original: EditorActionHandler) : Ed
         val lineEnd = document.getLineEndOffset(line)
 
         val text = lineText(document, line).trim()
-        if (text.isNotEmpty() && text != DASH.toString()) return
+        if (text.isNotEmpty() && text != DASH.toString()) {
+            logger.debug { "Enter: line $line is '$text', not empty and not a dash" }
+            return
+        }
 
-        val owner = ownerLine(document, line) ?: return
+        val owner = ownerLine(document, line)
+        if (owner == null) {
+            logger.debug { "Enter: no key line above $line" }
+            return
+        }
 
         PsiDocumentManager.getInstance(project).commitDocument(document)
-        val keyValue = keyAt(file, document, owner) ?: return
-        if (!isSequenceKey(keyValue)) return
+        val keyValue = keyAt(file, document, owner)
+        if (keyValue == null) {
+            logger.debug { "Enter: no key at line $owner ('${lineText(document, owner)}')" }
+            return
+        }
+        if (!isSequenceKey(keyValue)) {
+            logger.debug { "Enter: key '${keyValue.keyText}' is not a sequence" }
+            return
+        }
 
-        val ownerIndent = indentOf(document, owner)
-        val item = " ".repeat(ownerIndent) + "$DASH "
+        val target = sequenceIndent(document, owner, line)
+        val item = " ".repeat(target) + "$DASH "
         document.replaceString(lineStart, lineEnd, item)
         editor.caretModel.moveToOffset(lineStart + item.length)
-        logger.debug { "Enter under sequence key '${keyValue.keyText}', indent $ownerIndent" }
+        logger.debug { "Enter under sequence key '${keyValue.keyText}', indent $target" }
 
         ApplicationManager.getApplication().invokeLater {
             if (editor.isDisposed || line >= document.lineCount) return@invokeLater
-            if (lineText(document, line).toString() != item) return@invokeLater
-            editor.caretModel.moveToOffset(document.getLineStartOffset(line) + item.length)
+
+            val settled = lineText(document, line).toString()
+            logger.debug { "After enter line $line is '$settled', expected '$item'" }
+            if (settled == item) {
+                editor.caretModel.moveToOffset(document.getLineStartOffset(line) + item.length)
+                return@invokeLater
+            }
+
+            if (settled.trim() != DASH.toString()) return@invokeLater
+            WriteCommandAction.runWriteCommandAction(project) {
+                val start = document.getLineStartOffset(line)
+                document.replaceString(start, document.getLineEndOffset(line), item)
+                editor.caretModel.moveToOffset(start + item.length)
+            }
         }
     }
 
@@ -130,6 +157,30 @@ private fun ownerLine(document: Document, line: Int): Int? {
         return candidate.takeIf { text.trimEnd().endsWith(':') }
     }
     return null
+}
+
+/**
+ * Where the dash belongs: on the level of the items already written under the key, and only when
+ * there are none — on the level of the key itself. A list written with the platform indent stays as
+ * it is, so a single typed dash never splits an existing sequence in two.
+ */
+private fun sequenceIndent(document: Document, owner: Int, typed: Int): Int {
+    val ownerIndent = indentOf(document, owner)
+    for (candidate in owner + 1 until document.lineCount) {
+        if (candidate == typed) continue
+        val text = lineText(document, candidate)
+        if (text.isBlank()) continue
+
+        val indent = text.takeWhile { it == ' ' }.length
+        val isItem = text.getOrNull(indent) == DASH
+        logger.debug {
+            "Sequence under line $owner (indent $ownerIndent): first item line $candidate " +
+                "is '$text', indent $indent, item $isItem"
+        }
+        return if (isItem && indent >= ownerIndent) indent else ownerIndent
+    }
+    logger.debug { "Sequence under line $owner (indent $ownerIndent): no items yet" }
+    return ownerIndent
 }
 
 private fun indentOf(document: Document, line: Int): Int =

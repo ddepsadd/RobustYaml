@@ -3,6 +3,7 @@ package com.jetbrains.rider.plugins.robustyaml
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -12,6 +13,7 @@ import com.jetbrains.rd.framework.util.asCoroutineDispatcher
 import com.jetbrains.rd.ide.model.RobustDataField
 import com.jetbrains.rd.ide.model.RobustFieldQuery
 import com.jetbrains.rd.ide.model.RobustFieldsReply
+import com.jetbrains.rd.ide.model.RobustImplementationsReply
 import com.jetbrains.rd.ide.model.robustYamlModel
 import com.jetbrains.rider.projectView.hasSolution
 import com.jetbrains.rider.projectView.solution
@@ -28,6 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class RobustBackend(private val project: Project, private val scope: CoroutineScope) {
     private val cache = ConcurrentHashMap<String, Deferred<List<RobustDataField>>>()
     private val ready = ConcurrentHashMap<String, List<RobustDataField>>()
+    private val implementationCache = ConcurrentHashMap<String, Deferred<List<String>>>()
+    private val implementationsReady = ConcurrentHashMap<String, List<String>>()
     private val restartPending = AtomicBoolean(false)
 
     init {
@@ -36,8 +40,23 @@ class RobustBackend(private val project: Project, private val scope: CoroutineSc
                 if (events.none { it.path.endsWith(".cs") }) return
                 cache.clear()
                 ready.clear()
+                implementationCache.clear()
+                implementationsReady.clear()
             }
         })
+    }
+
+    /**
+     * Classes a `!type:` tag may name for the field at the end of [path]. Same contract as
+     * [cachedFields]: a miss starts the call and answers null, because the annotator and the
+     * completion both run under a read action and must not wait for the protocol scheduler.
+     */
+    fun cachedImplementations(className: String, path: List<String>): List<String>? {
+        if (!project.hasSolution) return null
+        val key = keyOf(className, path)
+        implementationsReady[key]?.let { return it }
+        implementationCache.computeIfAbsent(key) { loadImplementations(it, className, path) }
+        return null
     }
 
     suspend fun typeFields(className: String, path: List<String> = emptyList()): List<RobustDataField> {
@@ -106,6 +125,32 @@ class RobustBackend(private val project: Project, private val scope: CoroutineSc
             logger.warn("Backend call failed for '$key'", it)
             cache.remove(key)
         }.map { it.fields }.getOrDefault(emptyList())
+    }
+
+    private fun loadImplementations(
+        key: String,
+        className: String,
+        path: List<String>,
+    ): Deferred<List<String>> = scope.async {
+        runCatching {
+            val model = project.solution.robustYamlModel
+            val scheduler = model.protocol?.scheduler
+                ?: return@runCatching RobustImplementationsReply(false, emptyList())
+            withContext(scheduler.asCoroutineDispatcher) {
+                model.typeImplementations.startSuspending(RobustFieldQuery(className, path))
+            }
+        }.onSuccess { reply ->
+            logger.debug { "Backend returned ${reply.names.size} implementations for '$key'" }
+            if (!reply.resolved) {
+                implementationCache.remove(key)
+            } else {
+                implementationsReady[key] = reply.names
+                if (reply.names.isNotEmpty()) scheduleRestart()
+            }
+        }.onFailure {
+            logger.warn("Backend call failed for implementations of '$key'", it)
+            implementationCache.remove(key)
+        }.map { it.names }.getOrDefault(emptyList())
     }
 
     companion object {

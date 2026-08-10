@@ -8,12 +8,14 @@ import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.psi.PsiElement
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLScalar
+import org.jetbrains.yaml.psi.YAMLSequenceItem
 
 class RobustYamlAnnotator : Annotator {
     override fun annotate(element: PsiElement, holder: AnnotationHolder) {
         when (element) {
             is YAMLKeyValue -> {
                 annotateTypeKey(element, holder)
+                reportUnknownTag(element, holder)
                 if (!inspectionsRun(element)) {
                     reportMissingRequired(element, holder)
                     reportUnknownField(element, holder)
@@ -28,6 +30,7 @@ class RobustYamlAnnotator : Annotator {
                 annotateScalar(element, holder)
                 if (!inspectionsRun(element)) reportUnknownPrototypeId(element, holder)
             }
+            is YAMLSequenceItem -> reportUnknownTag(element, holder)
         }
     }
 
@@ -40,6 +43,17 @@ class RobustYamlAnnotator : Annotator {
             .range(keyValue.key ?: keyValue)
         for (suggestion in problem.suggestions) {
             builder = builder.withFix(ChangeFieldNameFix(keyValue, suggestion))
+        }
+        builder.create()
+    }
+
+    private fun reportUnknownTag(carrier: PsiElement, holder: AnnotationHolder) {
+        val problem = RobustValidation.unknownTag(carrier) ?: return
+        val tag = ChangeTypeTagFix.tagOf(carrier) ?: return
+
+        var builder = holder.newAnnotation(HighlightSeverity.ERROR, problem.message).range(tag)
+        for (suggestion in problem.suggestions) {
+            builder = builder.withFix(ChangeTypeTagFix(carrier, suggestion))
         }
         builder.create()
     }
