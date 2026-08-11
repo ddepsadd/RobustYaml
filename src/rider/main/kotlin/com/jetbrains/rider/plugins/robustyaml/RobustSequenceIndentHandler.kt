@@ -150,7 +150,7 @@ private fun inDeclaration(file: PsiFile, offset: Int): Boolean {
     return RobustYamlContext.declarationAround(element) != null
 }
 
-private fun ownerLine(document: Document, line: Int): Int? {
+internal fun ownerLine(document: Document, line: Int): Int? {
     for (candidate in line - 1 downTo 0) {
         val text = lineText(document, candidate)
         if (text.isBlank()) continue
@@ -164,7 +164,7 @@ private fun ownerLine(document: Document, line: Int): Int? {
  * there are none — on the level of the key itself. A list written with the platform indent stays as
  * it is, so a single typed dash never splits an existing sequence in two.
  */
-private fun sequenceIndent(document: Document, owner: Int, typed: Int): Int {
+internal fun sequenceIndent(document: Document, owner: Int, typed: Int): Int {
     val ownerIndent = indentOf(document, owner)
     for (candidate in owner + 1 until document.lineCount) {
         if (candidate == typed) continue

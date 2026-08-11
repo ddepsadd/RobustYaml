@@ -37,6 +37,13 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceIndex" />
     <fileBasedIndex
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleIndex" />
+    <fileBasedIndex
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlValueIndex" />
+    <findUsagesHandlerFactory
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustFindUsagesHandlerFactory" />
+    <targetElementEvaluator
+        language="yaml"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustTargetElementEvaluator" />
     <localInspection
         language="yaml"
         shortName="RobustUnknownPrototypeId"

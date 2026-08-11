@@ -2,6 +2,7 @@ import com.jetbrains.plugin.structure.base.utils.isFile
 import groovy.ant.FileNameFinder
 import org.apache.tools.ant.taskdefs.condition.Os
 import org.jetbrains.intellij.platform.gradle.Constants
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -59,6 +60,9 @@ sourceSets {
         java.srcDir("src/rider/main/java")
         kotlin.srcDir("src/rider/main/kotlin")
         resources.srcDir("src/rider/main/resources")
+    }
+    test {
+        kotlin.srcDir("src/rider/test/kotlin")
     }
 }
 
@@ -148,7 +152,9 @@ dependencies {
         jetbrainsRuntime()
         bundledPlugin("org.jetbrains.plugins.yaml")
         bundledModule("intellij.rider.rdclient.dotnet")
+        testFramework(TestFrameworkType.Platform)
     }
+    testImplementation("junit:junit:4.13.2")
 }
 
 tasks.runIde {

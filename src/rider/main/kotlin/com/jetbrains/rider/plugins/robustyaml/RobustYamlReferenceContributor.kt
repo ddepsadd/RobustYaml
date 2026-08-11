@@ -106,6 +106,13 @@ class LocalizationIdReference(scalar: YAMLScalar) :
 
     override fun resolve(): PsiElement? =
         RobustLocalization.declaration(element.project, RobustLocalization.messageId(value))
+
+    /**
+     * The declaration stands for a line of a `.ftl`, which has no PSI of its own, so a fresh
+     * instance is built on every resolve and identity comparison never holds.
+     */
+    override fun isReferenceTo(element: PsiElement): Boolean =
+        RobustLocalization.declaredMessageId(element) == RobustLocalization.messageId(value)
 }
 
 private object PrototypeIdReferenceProvider : PsiReferenceProvider() {
@@ -124,6 +131,16 @@ class PrototypeIdReference(scalar: YAMLScalar) :
 
     override fun resolve(): PsiElement? =
         RobustPrototypeIndex.findDeclarations(element.project, value).firstOrNull()
+
+    /**
+     * One id may be declared by several kinds — `Syndicate` is an antag, a department and more —
+     * and [resolve] answers with the first of them. Comparing against that one would drop the
+     * usages of every other declaration, so the target is recognised by what it declares.
+     */
+    override fun isReferenceTo(element: PsiElement): Boolean =
+        element is YAMLKeyValue &&
+            RobustYamlContext.isPrototypeIdDeclaration(element) &&
+            element.valueText == value
 }
 
 private object PrototypeKindReferenceProvider : PsiReferenceProvider() {

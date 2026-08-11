@@ -105,6 +105,9 @@ object RobustLocalization {
         return null
     }
 
+    /** The id a stand-in declaration carries, or null for anything that is not one. */
+    fun declaredMessageId(element: PsiElement): String? = (element as? MessageDeclaration)?.name
+
     fun declaration(project: Project, id: String): PsiElement? {
         val site = sites(project, id).firstOrNull() ?: return null
         val file = PsiManager.getInstance(project).findFile(site.file) ?: return null
@@ -137,6 +140,14 @@ private class MessageDeclaration(
     override fun getTextOffset(): Int = offset
 
     override fun getTextRange(): TextRange = TextRange(offset, offset + id.length)
+
+    // Left alone, a fake element reports no text and zero length, and the usage preview paints the
+    // whole `.ftl` instead of the line the key is declared on: the preview highlights the range of
+    // the element it restores from the usage. Physical it must not become — a smart pointer would
+    // then be rebuilt from an offset in a plain text file, and restore the whole file as one token.
+    override fun getText(): String = id
+
+    override fun getTextLength(): Int = id.length
 
     override fun canNavigate(): Boolean = file.virtualFile != null
 

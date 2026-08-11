@@ -60,7 +60,17 @@ object RobustYamlContext {
         var current: PsiElement? = element.parent
         while (current != null) {
             if (current === declaration.mapping) return Origin(null, path.toList())
-            taggedType(current)?.let { return Origin(it, path.toList()) }
+
+            // A tag describes what lies inside the value it is attached to, so it counts only when
+            // the walk came up through that value: standing on the key itself, its own tag is none
+            // of its business.
+            val fromValue = when (current) {
+                is YAMLKeyValue -> current.value === child
+                is YAMLSequenceItem -> current.value === child
+                else -> true
+            }
+            if (fromValue) taggedType(current)?.let { return Origin(it, path.toList()) }
+
             if (current is YAMLKeyValue && current.value === child) path.addFirst(current.keyText)
             child = current
             current = current.parent
