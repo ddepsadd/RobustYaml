@@ -36,8 +36,11 @@ class RobustYamlValueIndex : ScalarIndexExtension<String>() {
     companion object {
         val NAME: ID<String, Void> = ID.create("robustyaml.values")
 
+        // The name of a key may hold dashes — `accent-cowboy-words-1: accent-cowboy-replacement-1`
+        // is a mapping of one message onto another — and a key that fails to parse takes the value
+        // with it, hiding every usage written that way.
         private val SCALAR =
-            Regex("""(?m)^﻿?[ \t]*(?:-[ \t]+)?(?:[\w.]+[ \t]*:[ \t]*)?(\[[^\]\r\n]*\]|[^\s#\[\]]+)[ \t]*(?:#.*)?\r?$""")
+            Regex("""(?m)^﻿?[ \t]*(?:-[ \t]+)?(?:([\w.-]+)[ \t]*:[ \t]*)?(\[[^\]\r\n]*\]|[^\s#\[\]]+)[ \t]*(?:#.*)?\r?$""")
 
         private val PROTOTYPE_ID = Regex("""[A-Z][A-Za-z0-9]*""")
 
@@ -46,7 +49,12 @@ class RobustYamlValueIndex : ScalarIndexExtension<String>() {
         fun values(text: CharSequence): Map<String, Void?> {
             val keys = mutableMapOf<String, Void?>()
             for (match in SCALAR.findAll(text)) {
-                val value = match.groupValues[1]
+                // The name of a key is a reference too when a mapping is keyed by messages:
+                // `accent-cowboy-words-1: accent-cowboy-replacement-1` mentions two of them.
+                val name = match.groupValues[1]
+                if (MESSAGE_ID.matches(name)) keys[name] = null
+
+                val value = match.groupValues[2]
                 val items =
                     if (value.startsWith('[')) value.trim('[', ']').split(',')
                     else listOf(value)

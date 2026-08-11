@@ -44,6 +44,12 @@
     <targetElementEvaluator
         language="yaml"
         implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustTargetElementEvaluator" />
+    <renamePsiElementProcessor
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustRenameProcessor" />
+    <nonProjectFileWritingAccessExtension
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustFileWritingAccess" />
+    <elementDescriptionProvider
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustElementDescription" />
     <localInspection
         language="yaml"
         shortName="RobustUnknownPrototypeId"

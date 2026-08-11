@@ -45,6 +45,19 @@ class RobustYamlValueIndexTest {
         assertTrue(keys.containsAll(listOf("HideSpawnMenu", "Cargo")))
     }
 
+    /** Both sides here are messages, and a dashed key must not swallow the value after it. */
+    @Test
+    fun `a key with dashes keeps its value`() {
+        val keys = values(
+            """
+              words:
+                accent-cowboy-words-1: accent-cowboy-replacement-1
+            """,
+        )
+
+        assertTrue(keys.contains("accent-cowboy-replacement-1"))
+    }
+
     @Test
     fun `quotes are stripped`() {
         assertTrue(values("""  parent: "BaseItem"""").contains("BaseItem"))

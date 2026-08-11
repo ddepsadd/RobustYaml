@@ -7,6 +7,7 @@ import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
@@ -85,55 +86,57 @@ fun searchedTarget(element: PsiElement): SearchedTarget? {
 private const val ID_KEY = "id"
 private const val TYPE_KEY = "type"
 
+/**
+ * Every reference to [target] in the content. The index narrows the walk to the files that mention
+ * the text; what the value actually refers to is decided by the reference sitting on it, so a value
+ * that merely reads alike — a sprite state, a component name — never gets in.
+ *
+ * A read action is taken per file rather than once for all of them: holding one over thousands of
+ * files would stall every write the IDE wants to make.
+ */
+internal fun processReferences(
+    project: Project,
+    target: SearchedTarget,
+    consumer: (PsiReference) -> Boolean,
+): Boolean {
+    val files = ReadAction.compute<Collection<VirtualFile>, RuntimeException> {
+        RobustYamlValueIndex.files(project, target.name)
+    }
+    logger.debug { "References to '${target.name}': ${files.size} candidate files" }
+
+    val manager = PsiManager.getInstance(project)
+    for (file in files) {
+        ProgressManager.checkCanceled()
+
+        val wanted = ReadAction.compute<Boolean, RuntimeException> {
+            val psiFile = manager.findFile(file) ?: return@compute true
+            for (scalar in PsiTreeUtil.findChildrenOfType(psiFile, YAMLScalar::class.java)) {
+                val reference = referenceOn(scalar, target) ?: continue
+                if (!consumer(reference)) return@compute false
+            }
+            true
+        }
+        if (!wanted) return false
+    }
+    return true
+}
+
+private fun referenceOn(scalar: YAMLScalar, target: SearchedTarget): PsiReference? {
+    if (target.localization) {
+        if (RobustLocalization.messageId(scalar.textValue) != target.name) return null
+        return scalar.references.firstOrNull { it is LocalizationIdReference }
+    }
+
+    if (scalar.textValue != target.name) return null
+    return scalar.references.firstOrNull { it is PrototypeIdReference }
+}
+
 class RobustFindUsagesHandler(element: PsiElement, private val target: SearchedTarget) :
     FindUsagesHandler(element) {
 
-    /**
-     * The search runs on a background task with no read action of its own — the platform searchers
-     * take one themselves, and so must this. It is taken per file rather than once for all of them:
-     * holding a read action over thousands of files would stall every write the IDE wants to make.
-     */
     override fun processElementUsages(
         element: PsiElement,
         processor: Processor<in UsageInfo>,
         options: FindUsagesOptions,
-    ): Boolean {
-        val project = element.project
-        val files = ReadAction.compute<Collection<VirtualFile>, RuntimeException> {
-            RobustYamlValueIndex.files(project, target.name)
-        }
-        logger.debug { "Usages of '${target.name}': ${files.size} candidate files" }
-
-        val manager = PsiManager.getInstance(project)
-        for (file in files) {
-            ProgressManager.checkCanceled()
-
-            val wanted = ReadAction.compute<Boolean, RuntimeException> {
-                val psiFile = manager.findFile(file) ?: return@compute true
-                for (scalar in PsiTreeUtil.findChildrenOfType(psiFile, YAMLScalar::class.java)) {
-                    val reference = referenceOf(scalar) ?: continue
-                    if (!processor.process(UsageInfo(reference))) return@compute false
-                }
-                true
-            }
-            if (!wanted) return false
-        }
-        return true
-    }
-
-    /**
-     * A mention counts when the text matches and the value is a reference of the kind searched for.
-     * The kind is what keeps `- type: Sprite` and a sprite state named alike out of the list, and
-     * it is asked of the reference rather than of the target: one id may be declared several times,
-     * and the caret may sit on a reference rather than on any of those declarations.
-     */
-    private fun referenceOf(scalar: YAMLScalar): PsiReference? {
-        if (target.localization) {
-            if (RobustLocalization.messageId(scalar.textValue) != target.name) return null
-            return scalar.references.firstOrNull { it is LocalizationIdReference }
-        }
-
-        if (scalar.textValue != target.name) return null
-        return scalar.references.firstOrNull { it is PrototypeIdReference }
-    }
+    ): Boolean = processReferences(element.project, target) { processor.process(UsageInfo(it)) }
 }
