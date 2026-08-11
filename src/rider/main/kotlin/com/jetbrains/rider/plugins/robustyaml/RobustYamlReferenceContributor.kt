@@ -113,6 +113,17 @@ class LocalizationIdReference(scalar: YAMLScalar) :
      */
     override fun isReferenceTo(element: PsiElement): Boolean =
         RobustLocalization.declaredMessageId(element) == RobustLocalization.messageId(value)
+
+    /**
+     * The reference spans the whole value, but what is being renamed is the message alone: what
+     * follows a dot is a Fluent attribute of it, and rewriting the range wholesale would drop the
+     * attribute — 29 values of ss14-wega are written that way.
+     */
+    override fun handleElementRename(newElementName: String): PsiElement {
+        val attribute = value.substringAfter('.', "")
+        val replacement = if (attribute.isEmpty()) newElementName else "$newElementName.$attribute"
+        return super.handleElementRename(replacement)
+    }
 }
 
 private object PrototypeIdReferenceProvider : PsiReferenceProvider() {

@@ -45,6 +45,25 @@ class RobustYamlValueIndexTest {
         assertTrue(keys.containsAll(listOf("HideSpawnMenu", "Cargo")))
     }
 
+    /**
+     * An anchor stands between the colon and the value, and reading it as the value cost the whole
+     * line: 46 values of ss14-wega are written this way, and `door-remote-open-close-text` was not
+     * findable at all.
+     */
+    @Test
+    fun `an anchored value is indexed`() {
+        val keys = values("""      tooltip: &TextOpenClose door-remote-open-close-text""")
+
+        assertTrue(keys.contains("door-remote-open-close-text"))
+    }
+
+    @Test
+    fun `an anchor is not indexed as a value of its own`() {
+        val keys = values("""      tooltip: &TextOpenClose door-remote-open-close-text""")
+
+        assertFalse(keys.contains("TextOpenClose"))
+    }
+
     /** Both sides here are messages, and a dashed key must not swallow the value after it. */
     @Test
     fun `a key with dashes keeps its value`() {

@@ -16,12 +16,24 @@ import org.jetbrains.yaml.psi.YAMLKeyValue
  */
 class RobustElementDescription : ElementDescriptionProvider {
     override fun getElementDescription(element: PsiElement, location: ElementDescriptionLocation): String? {
+        RobustLocalization.declaredMessageId(element)?.let { id ->
+            return when (location) {
+                is UsageViewTypeLocation -> "localization message"
+                is UsageViewShortNameLocation, is UsageViewLongNameLocation -> id
+                else -> null
+            }
+        }
+
         val keyValue = element as? YAMLKeyValue ?: return null
-        if (!RobustYamlContext.isPrototypeIdDeclaration(keyValue)) return null
+
+        // Not just declarations: with the caret on `tooltip: door-remote-open-close-text` the search
+        // is for the message, yet the window was titled "tooltip in All Places" — the key is what a
+        // key-value answers when asked for its name, whichever side of the reference it stands on.
+        val target = searchedTarget(keyValue) ?: return null
 
         return when (location) {
-            is UsageViewTypeLocation -> "prototype id"
-            is UsageViewShortNameLocation, is UsageViewLongNameLocation -> keyValue.valueText
+            is UsageViewTypeLocation -> if (target.localization) "localization message" else "prototype id"
+            is UsageViewShortNameLocation, is UsageViewLongNameLocation -> target.name
             else -> null
         }
     }

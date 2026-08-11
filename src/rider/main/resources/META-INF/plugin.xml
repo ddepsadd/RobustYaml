@@ -39,6 +39,8 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleIndex" />
     <fileBasedIndex
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlValueIndex" />
+    <fileBasedIndex
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleUsageIndex" />
     <findUsagesHandlerFactory
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustFindUsagesHandlerFactory" />
     <targetElementEvaluator
@@ -46,6 +48,12 @@
         implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustTargetElementEvaluator" />
     <renamePsiElementProcessor
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustRenameProcessor" />
+    <renamePsiElementProcessor
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleRenameProcessor" />
+    <renameHandler
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleRenameHandler" />
+    <renameInputValidator
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleNameValidator" />
     <nonProjectFileWritingAccessExtension
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustFileWritingAccess" />
     <elementDescriptionProvider

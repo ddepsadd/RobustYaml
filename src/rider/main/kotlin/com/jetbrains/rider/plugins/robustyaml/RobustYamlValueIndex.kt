@@ -21,7 +21,7 @@ import com.intellij.util.io.KeyDescriptor
 class RobustYamlValueIndex : ScalarIndexExtension<String>() {
     override fun getName(): ID<String, Void> = NAME
 
-    override fun getVersion(): Int = 1
+    override fun getVersion(): Int = 2
 
     override fun dependsOnFileContent(): Boolean = true
 
@@ -38,9 +38,14 @@ class RobustYamlValueIndex : ScalarIndexExtension<String>() {
 
         // The name of a key may hold dashes — `accent-cowboy-words-1: accent-cowboy-replacement-1`
         // is a mapping of one message onto another — and a key that fails to parse takes the value
-        // with it, hiding every usage written that way.
+        // with it, hiding every usage written that way. An anchor is allowed for the same reason:
+        // `tooltip: &TextOpenClose door-remote-open-close-text` otherwise matched nothing at all,
+        // because `&TextOpenClose` was read as the value and the text after it broke the line.
         private val SCALAR =
-            Regex("""(?m)^﻿?[ \t]*(?:-[ \t]+)?(?:([\w.-]+)[ \t]*:[ \t]*)?(\[[^\]\r\n]*\]|[^\s#\[\]]+)[ \t]*(?:#.*)?\r?$""")
+            Regex(
+                """(?m)^﻿?[ \t]*(?:-[ \t]+)?(?:([\w.-]+)[ \t]*:[ \t]*)?(?:&[\w-]+[ \t]+)?""" +
+                    """(\[[^\]\r\n]*\]|[^\s#\[\]]+)[ \t]*(?:#.*)?\r?$""",
+            )
 
         private val PROTOTYPE_ID = Regex("""[A-Z][A-Za-z0-9]*""")
 

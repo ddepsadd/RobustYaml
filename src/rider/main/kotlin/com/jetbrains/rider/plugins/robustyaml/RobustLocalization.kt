@@ -94,6 +94,29 @@ object RobustLocalization {
         return body.toString().trim().ifEmpty { null }
     }
 
+    /**
+     * The message named at [offset] of a `.ftl`, whether the text there declares it or refers to it.
+     * The file has no PSI to ask, so the line is read instead: a declaration opens the line and ends
+     * at the `=`, a reference stands inside a placeable.
+     */
+    fun idAt(text: CharSequence, offset: Int): String? {
+        if (offset < 0 || offset > text.length) return null
+
+        var start = offset
+        while (start > 0 && text[start - 1] != '\n') start--
+        var end = offset
+        while (end < text.length && text[end] != '\n') end++
+
+        val line = text.subSequence(start, end)
+        DECLARATION.matchAt(line, 0)?.groups?.get(1)?.let { id ->
+            if (offset - start in id.range.first..id.range.last + 1) return id.value
+        }
+
+        return RobustLocaleUsageIndex.placeables(line)
+            .firstOrNull { offset - start in it.start..it.end }
+            ?.id
+    }
+
     /** Culture of a locale file, taken from the directory right under `Locale`. */
     fun cultureOf(file: VirtualFile): String? {
         var current = file.parent
@@ -117,6 +140,8 @@ object RobustLocalization {
     private fun localeScope(project: Project): GlobalSearchScope = ProjectScope.getAllScope(project)
 
     private const val LOCALE_DIR = "Locale"
+
+    private val DECLARATION = Regex("""﻿?([A-Za-z][\w-]*)[ \t]*=""")
 }
 
 /**
@@ -124,7 +149,7 @@ object RobustLocalization {
  * token and navigation would always land on its first line. This stands in for the declaration and
  * navigates by offset itself.
  */
-private class MessageDeclaration(
+internal class MessageDeclaration(
     private val file: PsiFile,
     private val id: String,
     private val offset: Int,

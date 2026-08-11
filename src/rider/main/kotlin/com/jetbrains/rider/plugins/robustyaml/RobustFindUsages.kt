@@ -99,6 +99,19 @@ internal fun processReferences(
     target: SearchedTarget,
     consumer: (PsiReference) -> Boolean,
 ): Boolean {
+    if (!processYamlReferences(project, target, consumer)) return false
+
+    // A localization key is named from C# as often as from a prototype — 5657 of the 56269 messages
+    // of ss14-wega against 10875 — and those files have no PSI on the frontend to search through.
+    if (!target.localization) return true
+    return processLocaleTextUsages(project, target.name, consumer)
+}
+
+private fun processYamlReferences(
+    project: Project,
+    target: SearchedTarget,
+    consumer: (PsiReference) -> Boolean,
+): Boolean {
     val files = ReadAction.compute<Collection<VirtualFile>, RuntimeException> {
         RobustYamlValueIndex.files(project, target.name)
     }
@@ -134,9 +147,44 @@ private fun referenceOn(scalar: YAMLScalar, target: SearchedTarget): PsiReferenc
 class RobustFindUsagesHandler(element: PsiElement, private val target: SearchedTarget) :
     FindUsagesHandler(element) {
 
+    /**
+     * Taken here rather than inside the search: the handler is built under a read action, and
+     * [processElementUsages] runs without one. Asking a `YAMLKeyValue` for its project walks up the
+     * AST, which asserts read access — the search then died before its first file and Alt+F7
+     * answered "Nothing found" with the failure buried in the log as a plugin error.
+     */
+    private val project: Project =
+        ReadAction.compute<Project, RuntimeException> { element.project }
+
     override fun processElementUsages(
         element: PsiElement,
         processor: Processor<in UsageInfo>,
         options: FindUsagesOptions,
-    ): Boolean = processReferences(element.project, target) { processor.process(UsageInfo(it)) }
+    ): Boolean {
+        if (target.localization && !processDeclarations(processor)) return false
+        return processReferences(project, target) { processor.process(UsageInfo(it)) }
+    }
+
+    /**
+     * Where the message is written down. A declaration is not a usage anywhere else, and for a
+     * prototype id it would be pointless — the caret usually starts there. A message is different:
+     * it is declared once per culture, 27636 of the 56269 in ss14-wega more than once, and "where is
+     * this text" is the question Alt+F7 is being asked. Without them the search answered with the
+     * YAML value the caret already stood on and nothing else.
+     */
+    private fun processDeclarations(processor: Processor<in UsageInfo>): Boolean {
+        val manager = PsiManager.getInstance(project)
+        for (site in ReadAction.compute<List<RobustLocalization.MessageSite>, RuntimeException> {
+            RobustLocalization.sites(project, target.name)
+        }) {
+            ProgressManager.checkCanceled()
+
+            val wanted = ReadAction.compute<Boolean, RuntimeException> {
+                val file = manager.findFile(site.file) ?: return@compute true
+                processor.process(UsageInfo(file, site.offset, site.offset + target.name.length))
+            }
+            if (!wanted) return false
+        }
+        return true
+    }
 }

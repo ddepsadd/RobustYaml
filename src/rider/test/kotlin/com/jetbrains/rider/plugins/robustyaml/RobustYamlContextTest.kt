@@ -8,6 +8,7 @@ import com.intellij.util.ProcessingContext
 import com.intellij.testFramework.ParsingTestCase
 import org.jetbrains.yaml.YAMLParserDefinition
 import org.jetbrains.yaml.psi.YAMLKeyValue
+import org.jetbrains.yaml.psi.YAMLScalar
 import org.jetbrains.yaml.psi.YAMLSequenceItem
 
 /**
@@ -190,6 +191,27 @@ class RobustYamlContextTest : ParsingTestCase("", "yml", YAMLParserDefinition())
         val color = PsiTreeUtil.findChildrenOfType(file, YAMLKeyValue::class.java)
             .first { it.keyText == "color" }
         assertNull(RobustYamlContext.taggedType(color))
+    }
+
+    /**
+     * An anchor is written between the colon and the value, and Find Usages compares the text of
+     * the scalar with what it is looking for: were the anchor part of that text, no search would
+     * ever match `tooltip: &TextOpenClose door-remote-open-close-text`.
+     */
+    fun testAnchorIsNotPartOfTheValue() {
+        val file = parse(
+            """
+            - type: entity
+              id: Foo
+              components:
+              - type: DoorRemote
+                tooltip: &TextOpenClose door-remote-open-close-text
+            """,
+        )
+
+        val tooltip = PsiTreeUtil.findChildrenOfType(file, YAMLKeyValue::class.java)
+            .first { it.keyText == "tooltip" }
+        assertEquals("door-remote-open-close-text", (tooltip.value as YAMLScalar).textValue)
     }
 
     private fun parse(text: String): PsiFile = createPsiFile("test", text.trimIndent())
