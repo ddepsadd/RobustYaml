@@ -15,6 +15,7 @@ import com.intellij.psi.PsiReference
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.Processor
+import org.jetbrains.yaml.psi.YAMLAlias
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLScalar
 
@@ -60,7 +61,10 @@ fun searchedTarget(element: PsiElement): SearchedTarget? {
 
     val keyValue = element as? YAMLKeyValue ?: return null
     if (RobustYamlContext.isPrototypeIdDeclaration(keyValue)) {
-        return keyValue.valueText.takeIf { it.isNotEmpty() }?.let { SearchedTarget(it, localization = false) }
+        // Not `valueText`: it answers with an empty string for `id: *BackgammonBoard`, and thirteen
+        // prototypes in the content are declared that way.
+        val declared = RobustYamlContext.resolvedText(keyValue.value)
+        return declared?.takeIf { it.isNotEmpty() }?.let { SearchedTarget(it, localization = false) }
     }
 
     // `type:` names a kind or a component and has references of its own; a nested `id:` names an
@@ -144,6 +148,56 @@ private fun referenceOn(scalar: YAMLScalar, target: SearchedTarget): PsiReferenc
     return scalar.references.firstOrNull { it is PrototypeIdReference }
 }
 
+/**
+ * Values written as an alias. The engine resolves those while parsing the document, so
+ * `tooltip: *TextOpenClose` names its message as plainly as the spelled-out text would; the walk
+ * above cannot see them, because an alias is not a [YAMLScalar] and carries no text of its own.
+ *
+ * They are reported as usages and not as references on purpose. The text lives at the anchor, and
+ * that is where a rename writes it — an alias needs no edit and must not get one, or a link the
+ * author wrote deliberately would be replaced by a literal copy.
+ */
+private fun processAliasUsages(
+    project: Project,
+    target: SearchedTarget,
+    consumer: (YAMLAlias) -> Boolean,
+): Boolean {
+    val files = ReadAction.compute<Collection<VirtualFile>, RuntimeException> {
+        RobustYamlValueIndex.files(project, target.name)
+    }
+
+    val manager = PsiManager.getInstance(project)
+    for (file in files) {
+        ProgressManager.checkCanceled()
+
+        val wanted = ReadAction.compute<Boolean, RuntimeException> {
+            val psiFile = manager.findFile(file) ?: return@compute true
+            val aliases = PsiTreeUtil.findChildrenOfType(psiFile, YAMLAlias::class.java)
+            if (aliases.isEmpty()) return@compute true
+
+            val anchored = RobustYamlContext.anchoredScalars(psiFile)
+            for (alias in aliases) {
+                val text = anchored[alias.aliasName]?.textValue ?: continue
+                val name = if (target.localization) RobustLocalization.messageId(text) else text
+                if (name != target.name) continue
+
+                // `id: *BackgammonBoard` declares the prototype rather than using it, and a
+                // declaration is left out of the results the way a spelled-out one is.
+                val owner = alias.parent as? YAMLKeyValue
+                if (owner?.value === alias && owner != null &&
+                    RobustYamlContext.isPrototypeIdDeclaration(owner)
+                ) {
+                    continue
+                }
+                if (!consumer(alias)) return@compute false
+            }
+            true
+        }
+        if (!wanted) return false
+    }
+    return true
+}
+
 class RobustFindUsagesHandler(element: PsiElement, private val target: SearchedTarget) :
     FindUsagesHandler(element) {
 
@@ -162,7 +216,8 @@ class RobustFindUsagesHandler(element: PsiElement, private val target: SearchedT
         options: FindUsagesOptions,
     ): Boolean {
         if (target.localization && !processDeclarations(processor)) return false
-        return processReferences(project, target) { processor.process(UsageInfo(it)) }
+        if (!processReferences(project, target) { processor.process(UsageInfo(it)) }) return false
+        return processAliasUsages(project, target) { processor.process(UsageInfo(it)) }
     }
 
     /**

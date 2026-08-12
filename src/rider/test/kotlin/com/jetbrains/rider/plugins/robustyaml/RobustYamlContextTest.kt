@@ -214,6 +214,64 @@ class RobustYamlContextTest : ParsingTestCase("", "yml", YAMLParserDefinition())
         assertEquals("door-remote-open-close-text", (tooltip.value as YAMLScalar).textValue)
     }
 
+    /**
+     * An alias is not a scalar — both descend from `YAMLValue`, but along different branches — so
+     * `keyValue.value as? YAMLScalar` is null on it and `getValueText` answers with an empty string.
+     * The engine sees neither: it resolves the alias while parsing and reads the anchored text.
+     */
+    fun testAnAliasStandsForTheValueItsAnchorMarks() {
+        val file = parse(
+            """
+            - type: entity
+              id: BackgammonBoard
+              components:
+              - type: TabletopGame
+                boardPrototype: &BackgammonBoard BackgammonBoardTabletop
+
+            - type: entity
+              id: *BackgammonBoard
+            """,
+        )
+
+        val declaration = PsiTreeUtil.findChildrenOfType(file, YAMLKeyValue::class.java)
+            .first { it.keyText == "id" && it.value !is YAMLScalar }
+        assertEquals("", declaration.valueText)
+        assertEquals("BackgammonBoardTabletop", RobustYamlContext.resolvedText(declaration.value))
+    }
+
+    /** Robust resolves aliases after reading the document, so an anchor may stand below its alias. */
+    fun testAnAliasResolvesWhenItsAnchorComesLater() {
+        val file = parse(
+            """
+            - type: entity
+              id: *Board
+
+            - type: entity
+              id: Board
+              components:
+              - type: TabletopGame
+                boardPrototype: &Board BoardTabletop
+            """,
+        )
+
+        val declaration = PsiTreeUtil.findChildrenOfType(file, YAMLKeyValue::class.java)
+            .first { it.keyText == "id" && it.value !is YAMLScalar }
+        assertEquals("BoardTabletop", RobustYamlContext.resolvedText(declaration.value))
+    }
+
+    fun testAPlainValueIsItsOwnResolvedScalar() {
+        val file = parse(
+            """
+            - type: entity
+              id: Crowbar
+            """,
+        )
+
+        val declaration = PsiTreeUtil.findChildrenOfType(file, YAMLKeyValue::class.java)
+            .first { it.keyText == "id" }
+        assertEquals("Crowbar", RobustYamlContext.resolvedText(declaration.value))
+    }
+
     private fun parse(text: String): PsiFile = createPsiFile("test", text.trimIndent())
 
     private fun originAt(text: String): RobustYamlContext.Origin {

@@ -1,7 +1,10 @@
 package com.jetbrains.rider.plugins.robustyaml
 
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiTreeUtil
+import org.jetbrains.yaml.psi.YAMLAlias
+import org.jetbrains.yaml.psi.YAMLAnchor
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLMapping
 import org.jetbrains.yaml.psi.YAMLScalar
@@ -126,6 +129,46 @@ object RobustYamlContext {
     fun isPrototypeIdDeclaration(keyValue: YAMLKeyValue): Boolean =
         keyValue.keyText == "id" &&
             PsiTreeUtil.getParentOfType(keyValue, YAMLKeyValue::class.java, true) == null
+
+    /**
+     * The scalar a value stands for: itself, or, for an alias, the one its anchor marks. The engine
+     * resolves aliases while parsing the document (`DataNodeParser.ResolveAliases`), so by the time a
+     * prototype is read there is no alias left — `id: *BackgammonBoard` is the text written next to
+     * `&BackgammonBoard` and nothing downstream can tell the difference.
+     *
+     * `YAMLKeyValue.getValueText` is no help here: it answers with an empty string for anything that
+     * is neither a scalar nor a compound value, and an alias is neither.
+     *
+     * The anchor is looked up rather than taken from the stock [org.jetbrains.yaml.psi.YAMLAlias]
+     * reference, which resolves through a cached value and needs an `InjectedLanguageManager` a
+     * parsing test has not got. Doing it here also states the engine's rule instead of the spec's:
+     * an anchor is searched for across the whole file, so an alias standing above it still resolves
+     * — `DataNodeParser` leaves a placeholder for exactly that case and fills it in afterwards.
+     */
+    fun resolvedScalar(value: YAMLValue?): YAMLScalar? =
+        when (value) {
+            is YAMLScalar -> value
+            is YAMLAlias -> value.containingFile?.let { anchoredScalars(it)[value.aliasName] }
+            else -> null
+        }
+
+    fun resolvedText(value: YAMLValue?): String? = resolvedScalar(value)?.textValue
+
+    /**
+     * Single values marked by an anchor, by name. Handed out whole rather than searched per alias:
+     * one file of the content carries 218 of them, and a walk of the tree for each would be paid for
+     * over and over. A duplicate anchor is a load-time exception for the engine, so which of the two
+     * wins is of no consequence; the first is kept, as a search would have found it.
+     */
+    fun anchoredScalars(file: PsiFile): Map<String, YAMLScalar> {
+        val anchored = mutableMapOf<String, YAMLScalar>()
+        for (anchor in PsiTreeUtil.findChildrenOfType(file, YAMLAnchor::class.java)) {
+            val name = anchor.name ?: continue
+            val value = anchor.markedValue as? YAMLScalar ?: continue
+            anchored.putIfAbsent(name, value)
+        }
+        return anchored
+    }
 
     private val VALIDATED_ID_KEYS = setOf("parent", "proto", "prototype", "entity")
 

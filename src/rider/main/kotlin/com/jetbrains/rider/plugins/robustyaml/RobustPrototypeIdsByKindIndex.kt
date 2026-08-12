@@ -12,7 +12,7 @@ import com.intellij.util.io.KeyDescriptor
 class RobustPrototypeIdsByKindIndex : FileBasedIndexExtension<String, String>() {
     override fun getName(): ID<String, String> = NAME
 
-    override fun getVersion(): Int = 1
+    override fun getVersion(): Int = 2
 
     override fun dependsOnFileContent(): Boolean = true
 

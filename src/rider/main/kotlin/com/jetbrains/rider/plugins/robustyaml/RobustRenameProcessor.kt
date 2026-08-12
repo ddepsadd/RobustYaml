@@ -99,8 +99,17 @@ class RobustRenameProcessor : RenamePsiElementProcessor() {
         }
         logger.debug { "Renamed to '$newName': $rewritten references rewritten" }
 
-        val value = (element as? YAMLKeyValue)?.value as? YAMLScalar
+        // `id: *BackgammonBoard` keeps its text at the anchor, so that is where the new name goes:
+        // an alias is not a `YAMLScalar` and has no manipulator of its own — the platform registers
+        // exactly two, for `YAMLScalarImpl` and `YAMLKeyValue` — so writing at the declaration would
+        // silently do nothing while every reference was rewritten, leaving them all dangling. One
+        // edit at the anchor is also all that is needed: the aliases pointing at it follow by
+        // themselves, the way they do for the engine.
+        val value = RobustYamlContext.resolvedScalar((element as? YAMLKeyValue)?.value)
         if (value != null) {
+            value.containingFile?.virtualFile?.let {
+                CommandProcessor.getInstance().addAffectedFiles(project, it)
+            }
             ElementManipulators.getManipulator(value)?.handleContentChange(value, newName)
         }
         listener?.elementRenamed(element)

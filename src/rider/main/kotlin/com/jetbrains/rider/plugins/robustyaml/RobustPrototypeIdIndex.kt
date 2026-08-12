@@ -12,7 +12,7 @@ import com.intellij.util.io.KeyDescriptor
 class RobustPrototypeIdIndex : FileBasedIndexExtension<String, String>() {
     override fun getName(): ID<String, String> = NAME
 
-    override fun getVersion(): Int = 3
+    override fun getVersion(): Int = 4
 
     override fun dependsOnFileContent(): Boolean = true
 
@@ -32,14 +32,36 @@ class RobustPrototypeIdIndex : FileBasedIndexExtension<String, String>() {
         private const val ENTRY_SEPARATOR = ';'
         private const val KIND_SEPARATOR = '@'
 
+        private const val ALIAS_PREFIX = '*'
+
         private val DECLARATION =
             Regex(
                 """(?m)^﻿?(?:-[ \t]+type[ \t]*:[ \t]*(\w+)""" +
                     """|[ ]{0,2}id[ \t]*:[ \t]*"?([^\s"#]+)"?)[ \t]*(?:#.*)?\r?$""",
             )
 
+        /**
+         * A single-token value marked by an anchor. Nothing longer is read: `offset: &icon-offset
+         * -0.09375, 0.0625` marks a vector, and an id never carries a space, so a partial capture
+         * would only put junk under a key nobody looks up.
+         */
+        private val ANCHOR =
+            Regex(
+                """(?m)^﻿?[ \t]*(?:-[ \t]+)?(?:[\w.-]+[ \t]*:[ \t]*)?""" +
+                    """&([\w-]+)[ \t]+"?([^\s"#]+)"?[ \t]*(?:#.*)?\r?$""",
+            )
+
         fun prototypeIds(text: CharSequence): Map<String, String> {
             val entries = mutableMapOf<String, MutableList<String>>()
+
+            // Robust resolves aliases against the whole document rather than against the text above
+            // them — an unknown anchor becomes a placeholder that a second pass fills in
+            // (`DataNodeParser.ParseAlias`) — so the anchors of the file are collected before any
+            // alias is looked up. The scan is paid for only by files that declare an id this way.
+            val anchors by lazy(LazyThreadSafetyMode.NONE) {
+                ANCHOR.findAll(text).associate { it.groupValues[1] to it.groupValues[2] }
+            }
+
             var kind = ""
             for (match in DECLARATION.findAll(text)) {
                 val declaredKind = match.groups[1]
@@ -47,8 +69,18 @@ class RobustPrototypeIdIndex : FileBasedIndexExtension<String, String>() {
                     kind = declaredKind.value
                     continue
                 }
-                val id = match.groups[2] ?: continue
-                entries.getOrPut(id.value) { mutableListOf() } += "$kind$KIND_SEPARATOR${id.range.first}"
+                val declared = match.groups[2] ?: continue
+
+                // `id: *BackgammonBoard` declares the id its anchor carries: by the time the
+                // prototype is read the alias no longer exists. The offset stays on the alias, since
+                // that is the line declaring the prototype and the one a jump should land on.
+                val id =
+                    if (declared.value.startsWith(ALIAS_PREFIX)) {
+                        anchors[declared.value.substring(1)] ?: continue
+                    } else {
+                        declared.value
+                    }
+                entries.getOrPut(id) { mutableListOf() } += "$kind$KIND_SEPARATOR${declared.range.first}"
             }
             return entries.mapValues { (_, list) -> list.joinToString(ENTRY_SEPARATOR.toString()) }
         }

@@ -125,6 +125,30 @@ class RobustFindUsagesTest : ParsingTestCase("", "yml", YAMLParserDefinition()) 
         assertFalse(PrototypeIdReference(parent).isReferenceTo(other))
     }
 
+    /**
+     * Thirteen prototypes in the content name themselves through an alias. The engine reads the
+     * anchored text and knows of no alias at all, so the search has to look for the same thing —
+     * `valueText` answers with an empty string here and left those prototypes unsearchable.
+     */
+    fun testAnAliasedIdIsSearchedByTheTextItsAnchorCarries() {
+        val file = parse(
+            """
+            - type: entity
+              id: BackgammonBoard
+              components:
+              - type: TabletopGame
+                boardPrototype: &BackgammonBoard BackgammonBoardTabletop
+
+            - type: entity
+              id: *BackgammonBoard
+            """,
+        )
+
+        val declaration = PsiTreeUtil.findChildrenOfType(file, YAMLKeyValue::class.java)
+            .first { it.keyText == "id" && it.value !is YAMLScalar }
+        assertEquals("BackgammonBoardTabletop", searchedTarget(declaration)?.name)
+    }
+
     private fun parse(text: String): PsiFile = createPsiFile("test", text.trimIndent())
 
     private fun key(file: PsiFile, name: String): YAMLKeyValue =
