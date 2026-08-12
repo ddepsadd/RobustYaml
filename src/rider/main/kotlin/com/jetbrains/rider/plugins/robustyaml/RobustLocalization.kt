@@ -131,10 +131,14 @@ object RobustLocalization {
     /** The id a stand-in declaration carries, or null for anything that is not one. */
     fun declaredMessageId(element: PsiElement): String? = (element as? MessageDeclaration)?.name
 
-    fun declaration(project: Project, id: String): PsiElement? {
-        val site = sites(project, id).firstOrNull() ?: return null
-        val file = PsiManager.getInstance(project).findFile(site.file) ?: return null
-        return MessageDeclaration(file, id, site.offset)
+    fun declaration(project: Project, id: String): PsiElement? = declarations(project, id).firstOrNull()
+
+    /** One per culture: `shell-command-success` is declared in both `ru-RU` and `en-US`. */
+    fun declarations(project: Project, id: String): List<PsiElement> {
+        val manager = PsiManager.getInstance(project)
+        return sites(project, id).mapNotNull { site ->
+            manager.findFile(site.file)?.let { MessageDeclaration(it, id, site.offset) }
+        }
     }
 
     private fun localeScope(project: Project): GlobalSearchScope = ProjectScope.getAllScope(project)

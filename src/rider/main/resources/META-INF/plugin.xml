@@ -54,6 +54,10 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleRenameHandler" />
     <renameInputValidator
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleNameValidator" />
+    <gotoDeclarationHandler
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleDeclarationHandler" />
+    <usageTargetProvider
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleUsageTargetProvider" />
     <nonProjectFileWritingAccessExtension
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustFileWritingAccess" />
     <elementDescriptionProvider
