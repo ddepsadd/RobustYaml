@@ -125,6 +125,22 @@ namespace ReSharperPlugin.RobustYaml
                     if (presentable.Contains(Unresolved))
                         return Unbuilt;
 
+                    // A name that says ProtoId while no kind came out is the same half-answer as a
+                    // type that did not build: twelve fields come back, everything reads as
+                    // successful, and only the kind is quietly missing. Cached, that kills the id
+                    // completion and the typed check for the whole session — `[categories=
+                    // entityCategory, parent=entity]` on one run, `[parent=entity]` on the next,
+                    // from unchanged sources. The judgement is made on the presentable name because
+                    // it is the one thing here known to be resolved: the failure happens inside
+                    // UnwrapType, where a cold cache makes GetElementTypesForGenericEnumerable
+                    // answer with an empty list, which is indistinguishable from "not a collection",
+                    // so the collection itself is returned and its short name is HashSet, not
+                    // ProtoId. Every type named by a ProtoId in the content carries [Prototype]
+                    // — all 191 of them — so a missing kind is never the honest answer.
+                    if (presentable.Contains(ProtoId) &&
+                        field.PrototypeKind == null && field.KeyPrototypeKind == null)
+                        return Unbuilt;
+
                     var values = EnumValues(field.Type, type.Module);
                     if (field.Constants != null)
                         values.Value = field.Constants;

@@ -3,6 +3,7 @@ package com.jetbrains.rider.plugins.robustyaml
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiElement
@@ -116,6 +117,22 @@ object RobustLocalization {
             .firstOrNull { offset - start in it.start..it.end }
             ?.id
     }
+
+    /**
+     * The message as every culture writes it, culture first. Sorted rather than left in index order,
+     * which is not guaranteed: an unsorted list would put the cultures in a different order after
+     * each reindexing and make the popup look like it changed.
+     */
+    fun translations(project: Project, id: String): List<Pair<String, String>> =
+        sites(project, id)
+            .mapNotNull { site ->
+                val text = runCatching { VfsUtilCore.loadText(site.file) }.getOrNull()
+                    ?: return@mapNotNull null
+                val body = messageAt(text, site.offset) ?: return@mapNotNull null
+                (cultureOf(site.file) ?: site.file.name) to body
+            }
+            .distinctBy { it.first }
+            .sortedBy { it.first }
 
     /** Culture of a locale file, taken from the directory right under `Locale`. */
     fun cultureOf(file: VirtualFile): String? {

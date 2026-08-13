@@ -7,7 +7,6 @@ import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.richcopy.HtmlSyntaxInfoUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
-import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.platform.backend.documentation.DocumentationContent
 import com.intellij.platform.backend.documentation.DocumentationResult
 import com.intellij.platform.backend.documentation.DocumentationTarget
@@ -74,15 +73,7 @@ private class MessageDocumentationTarget(
         }
 
     private fun translations(): List<Pair<String, String>> =
-        RobustLocalization.sites(project, id)
-            .mapNotNull { site ->
-                val text = runCatching { VfsUtilCore.loadText(site.file) }.getOrNull()
-                    ?: return@mapNotNull null
-                val body = RobustLocalization.messageAt(text, site.offset) ?: return@mapNotNull null
-                (RobustLocalization.cultureOf(site.file) ?: site.file.name) to body
-            }
-            .distinctBy { it.first }
-            .sortedBy { it.first }
+        RobustLocalization.translations(project, id)
 
     private fun shorten(text: String): String {
         val single = text.replace('\n', ' ')
