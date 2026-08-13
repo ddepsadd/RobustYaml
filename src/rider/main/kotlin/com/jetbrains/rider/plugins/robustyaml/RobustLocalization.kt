@@ -76,23 +76,59 @@ object RobustLocalization {
      * lines, which is how Fluent writes multiline values and attributes. A blank line or a line
      * starting at column zero ends the entry.
      */
-    fun messageAt(text: CharSequence, offset: Int): String? {
+    fun messageAt(text: CharSequence, offset: Int): String? =
+        entryLines(text, offset)?.joinToString("\n") { it.trim() }?.trim()?.ifEmpty { null }
+
+    /** A Fluent entry as it is written: the value of the message, then its attributes. */
+    data class Entry(val value: String?, val attributes: Map<String, String>)
+
+    /**
+     * The same entry split the way the engine reads it. `LocalizationManager.Entity` takes the name
+     * from the value and the description and the suffix from the `desc` and `suffix` attributes, and
+     * in the content the attributes carry more than the value does: 13909 descriptions against 7489
+     * written as `description:` in YAML. An entry with attributes only has no value, which the engine
+     * checks for explicitly — that is how a translation overrides a description alone.
+     */
+    fun entryAt(text: CharSequence, offset: Int): Entry? {
+        val lines = entryLines(text, offset) ?: return null
+
+        val value = StringBuilder()
+        val attributes = linkedMapOf<String, StringBuilder>()
+        var current = value
+        for (line in lines) {
+            val attribute = ATTRIBUTE.matchEntire(line.trim())
+            if (attribute != null) {
+                current = StringBuilder(attribute.groupValues[2].trim())
+                attributes[attribute.groupValues[1]] = current
+            } else {
+                if (current.isNotEmpty()) current.append('\n')
+                current.append(line.trim())
+            }
+        }
+        return Entry(
+            value.toString().trim().ifEmpty { null },
+            attributes.mapValues { it.value.toString().trim() }.filterValues { it.isNotEmpty() },
+        )
+    }
+
+    /** The lines an entry occupies: the text after `=`, then the indented continuation lines. */
+    private fun entryLines(text: CharSequence, offset: Int): List<String>? {
         val source = text.toString()
         val equals = source.indexOf('=', offset)
         if (offset >= source.length || equals < 0) return null
 
-        val body = StringBuilder()
+        val lines = mutableListOf<String>()
         var lineEnd = source.indexOf('\n', equals).takeIf { it >= 0 } ?: source.length
-        body.append(source.substring(equals + 1, lineEnd).trim())
+        lines += source.substring(equals + 1, lineEnd)
 
         while (lineEnd < source.length) {
             val next = source.indexOf('\n', lineEnd + 1).takeIf { it >= 0 } ?: source.length
             val line = source.substring(lineEnd + 1, next)
             if (line.isBlank() || !line.first().isWhitespace()) break
-            body.append('\n').append(line.trim())
+            lines += line
             lineEnd = next
         }
-        return body.toString().trim().ifEmpty { null }
+        return lines
     }
 
     /**
@@ -124,12 +160,46 @@ object RobustLocalization {
      * each reindexing and make the popup look like it changed.
      */
     fun translations(project: Project, id: String): List<Pair<String, String>> =
+        read(project, id) { text, offset -> messageAt(text, offset) }
+
+    /** The same, split into value and attributes: what an entity needs and a bare key does not. */
+    fun entries(project: Project, id: String): List<Pair<String, Entry>> =
+        read(project, id) { text, offset -> entryAt(text, offset) }
+
+    /**
+     * A message with its placeables filled in. Of the 32000 entity texts in the content 11593 are
+     * nothing but `{ ent-X }` — a translator writes one entry and points the rest at it — and 545 are
+     * `{ "" }`, which is how Fluent spells a deliberately empty override. Left alone, a third of the
+     * popups would read `{ ent-BaseCrowbar }` instead of a name.
+     *
+     * Resolution stays inside one culture, as a Fluent bundle does: `ru-RU` never reads `en-US`.
+     * Anything else between the braces — `{ $user }`, `{ NUMBER($x) }` — is an argument the engine
+     * supplies at runtime and nobody here can, so it is left standing as written.
+     */
+    fun resolved(project: Project, culture: String, text: String): String =
+        resolved(text) { id -> entries(project, id).firstOrNull { it.first == culture }?.second }
+
+    /** The same with the lookup handed in, which is all the rule itself needs to be checked. */
+    fun resolved(text: String, depth: Int = 0, lookup: (String) -> Entry?): String =
+        PLACEABLE.replace(text) { match ->
+            val literal = match.groups[LITERAL_GROUP]
+            if (literal != null) return@replace literal.value
+            if (depth >= MAX_DEPTH) return@replace match.value
+
+            val entry = lookup(match.groupValues[MESSAGE_GROUP]) ?: return@replace match.value
+            val attribute = match.groups[ATTRIBUTE_GROUP]?.value
+            val body = (if (attribute == null) entry.value else entry.attributes[attribute])
+                ?: return@replace match.value
+            resolved(body, depth + 1, lookup)
+        }
+
+    private fun <T> read(project: Project, id: String, parse: (CharSequence, Int) -> T?): List<Pair<String, T>> =
         sites(project, id)
             .mapNotNull { site ->
                 val text = runCatching { VfsUtilCore.loadText(site.file) }.getOrNull()
                     ?: return@mapNotNull null
-                val body = messageAt(text, site.offset) ?: return@mapNotNull null
-                (cultureOf(site.file) ?: site.file.name) to body
+                val parsed = parse(text, site.offset) ?: return@mapNotNull null
+                (cultureOf(site.file) ?: site.file.name) to parsed
             }
             .distinctBy { it.first }
             .sortedBy { it.first }
@@ -163,6 +233,22 @@ object RobustLocalization {
     private const val LOCALE_DIR = "Locale"
 
     private val DECLARATION = Regex("""﻿?([A-Za-z][\w-]*)[ \t]*=""")
+
+    private val ATTRIBUTE = Regex("""\.([\w-]+)[ \t]*=(.*)""")
+
+    private val PLACEABLE =
+        Regex("""\{[ \t]*(?:"([^"]*)"|([A-Za-z][\w-]*)(?:\.([\w-]+))?)[ \t]*}""")
+
+    private const val LITERAL_GROUP = 1
+    private const val MESSAGE_GROUP = 2
+    private const val ATTRIBUTE_GROUP = 3
+    /**
+     * Deep enough for the longest chain in the content and still a stop for a cycle, which Fluent
+     * itself only catches at runtime. Translators point one entry at another for whole families of
+     * items — `ent-ClothingHeadHeadHatBaseFlipped` reaches `ent-BaseItem` in five hops — and a limit
+     * of four left braces standing in ten popups.
+     */
+    private const val MAX_DEPTH = 16
 }
 
 /**

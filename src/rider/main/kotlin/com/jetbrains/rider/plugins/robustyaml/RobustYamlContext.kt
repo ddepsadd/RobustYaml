@@ -9,6 +9,7 @@ import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLMapping
 import org.jetbrains.yaml.psi.YAMLScalar
 import org.jetbrains.yaml.YAMLTokenTypes
+import org.jetbrains.yaml.psi.YAMLSequence
 import org.jetbrains.yaml.psi.YAMLSequenceItem
 import org.jetbrains.yaml.psi.YAMLValue
 
@@ -169,6 +170,22 @@ object RobustYamlContext {
         }
         return anchored
     }
+
+    /**
+     * Ids a declaration inherits from. `parent` is written three ways — a scalar, an inline list and
+     * a block list under the key — and all three mean the same to the engine, which reads the field
+     * as `string[]`.
+     */
+    fun parentIds(mapping: YAMLMapping): List<String> {
+        val parents = mutableListOf<String>()
+        when (val value = mapping.getKeyValueByKey(PARENT_KEY)?.value) {
+            is YAMLSequence -> value.items.mapNotNullTo(parents) { resolvedText(it.value) }
+            else -> resolvedText(value)?.let { parents += it }
+        }
+        return parents.map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
+    private const val PARENT_KEY = "parent"
 
     private val VALIDATED_ID_KEYS = setOf("parent", "proto", "prototype", "entity")
 

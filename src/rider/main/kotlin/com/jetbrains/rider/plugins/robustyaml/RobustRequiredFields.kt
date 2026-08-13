@@ -101,23 +101,11 @@ object RobustRequiredFields {
         (prototype.getKeyValueByKey(ABSTRACT_KEY)?.value as? YAMLScalar)?.textValue
             .equals("true", ignoreCase = true)
 
-    private fun parentsOf(prototype: YAMLMapping): List<String> {
-        val parents = mutableListOf<String>()
-        when (val value = prototype.getKeyValueByKey(PARENT_KEY)?.value) {
-            is YAMLScalar -> parents += value.textValue
-            is YAMLSequence ->
-                for (item in value.items) {
-                    (item.value as? YAMLScalar)?.let { parents += it.textValue }
-                }
-            else -> Unit
-        }
-        return parents.map { it.trim() }.filter { it.isNotEmpty() }
-    }
+    private fun parentsOf(prototype: YAMLMapping): List<String> = RobustYamlContext.parentIds(prototype)
 
     private const val ENTITY_KIND = "entity"
     private const val COMPONENTS_KEY = "components"
     private const val TYPE_KEY = "type"
-    private const val PARENT_KEY = "parent"
     private const val ABSTRACT_KEY = "abstract"
     private const val MAX_CHAIN = 64
 }

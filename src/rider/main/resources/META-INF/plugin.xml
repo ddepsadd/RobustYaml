@@ -127,7 +127,7 @@
     <platform.backend.documentation.targetProvider
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocalizationDocumentationProvider" />
     <platform.backend.documentation.targetProvider
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustCategoryDocumentationProvider" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeDocumentationProvider" />
     <psi.referenceContributor
         language="yaml"
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceContributor" />

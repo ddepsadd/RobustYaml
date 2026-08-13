@@ -38,9 +38,11 @@ trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/home"
 echo '{}' >"$work/home/product-info.json"
 
-javac -nowarn -d "$work" "$here"/*.java
+# The stdlib is on the compile path for `Function1` alone: a measurement that hands a lambda to a
+# Kotlin function needs the interface, and reflection over plugin classes still needs nothing else.
+javac -nowarn -cp "$stdlib" -d "$work" "$here"/*.java
 
-for measurement in ${only:-MeasureHoles MeasureReferences MeasureMigrations MeasureRequired MeasureScalars MeasureLocalization MeasureTags MeasureUsages MeasureLocaleRename MeasureAliases}; do
+for measurement in ${only:-MeasureHoles MeasureReferences MeasureMigrations MeasureRequired MeasureScalars MeasureLocalization MeasureTags MeasureUsages MeasureLocaleRename MeasureAliases MeasureEntityLoc}; do
   echo "== $measurement"
   java -Didea.home.path="$work/home" \
     -cp "$work:$classes:$stdlib:$dist/lib/*:$dist/plugins/yaml/lib/*" \
