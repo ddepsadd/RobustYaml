@@ -13,6 +13,8 @@
   <extensions defaultExtensionNs="com.intellij">
     <annotator language="yaml"
                implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustYamlAnnotator" />
+    <annotator language="TEXT"
+               implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustUnusedLocalizationAnnotator" />
     <additionalLibraryRootsProvider
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeRootsProvider" />
     <solutionExplorerRootProvider
@@ -41,6 +43,8 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlValueIndex" />
     <fileBasedIndex
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleUsageIndex" />
+    <fileBasedIndex
+        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleAffixIndex" />
     <findUsagesHandlerFactory
         implementation="com.jetbrains.rider.plugins.robustyaml.RobustFindUsagesHandlerFactory" />
     <targetElementEvaluator

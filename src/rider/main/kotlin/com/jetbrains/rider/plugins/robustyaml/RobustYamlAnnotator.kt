@@ -7,6 +7,7 @@ import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.psi.PsiElement
 import org.jetbrains.yaml.psi.YAMLKeyValue
+import org.jetbrains.yaml.psi.YAMLMapping
 import org.jetbrains.yaml.psi.YAMLScalar
 import org.jetbrains.yaml.psi.YAMLSequenceItem
 
@@ -31,6 +32,9 @@ class RobustYamlAnnotator : Annotator {
                 if (!inspectionsRun(element)) reportUnknownPrototypeId(element, holder)
             }
             is YAMLSequenceItem -> reportUnknownTag(element, holder)
+            // Read off the whole mapping at once: the rule is about neighbours, and asking it per
+            // key would walk the same crowd of ids over and over.
+            is YAMLMapping -> reportSiblingLocalizationIds(element, holder)
         }
     }
 
@@ -114,6 +118,22 @@ class RobustYamlAnnotator : Annotator {
                 .enforcedTextAttributes(RobustYamlColors.waveAttributes(false))
             for (suggestion in problem.suggestions) {
                 builder = builder.withFix(ChangeLocalizationIdFix(problem.element, suggestion))
+            }
+            builder.create()
+        }
+    }
+
+    private fun reportSiblingLocalizationIds(mapping: YAMLMapping, holder: AnnotationHolder) {
+        for (problem in RobustValidation.siblingLocalizationIds(mapping)) {
+            var builder = holder.newAnnotation(HighlightSeverity.WARNING, problem.message)
+                .range(problem.element)
+                .enforcedTextAttributes(RobustYamlColors.waveAttributes(false))
+            // The offender may be a key of the mapping, and only a scalar can be rewritten in place.
+            val scalar = problem.element as? YAMLScalar
+            if (scalar != null) {
+                for (suggestion in problem.suggestions) {
+                    builder = builder.withFix(ChangeLocalizationIdFix(scalar, suggestion))
+                }
             }
             builder.create()
         }

@@ -109,14 +109,23 @@ public final class MeasureHoles {
         }
     }
 
+    /**
+     * Both resource roots, as the plugin reads them: the engine keeps its own prototypes in
+     * {@code RobustToolbox/Resources/EnginePrototypes}, a level deeper and under a different name,
+     * and a measurement that walks only {@code Resources} is blind to 128 ids that the IDE indexes.
+     */
     static List<Path> prototypes(Path root) throws Exception {
-        Path resources = root.resolve("Resources");
-        if (!Files.isDirectory(resources)) return new ArrayList<>();
-        try (Stream<Path> walk = Files.walk(resources)) {
-            return walk.filter(p -> p.toString().endsWith(".yml"))
-                .filter(p -> p.toString().contains("Prototypes"))
-                .collect(Collectors.toList());
+        List<Path> found = new ArrayList<>();
+        for (Path resources : List.of(root.resolve("Resources"),
+            root.resolve("RobustToolbox").resolve("Resources"))) {
+            if (!Files.isDirectory(resources)) continue;
+            try (Stream<Path> walk = Files.walk(resources)) {
+                walk.filter(p -> p.toString().endsWith(".yml"))
+                    .filter(p -> p.toString().contains("Prototypes"))
+                    .forEach(found::add);
+            }
         }
+        return found;
     }
 
     static String read(Path path) {

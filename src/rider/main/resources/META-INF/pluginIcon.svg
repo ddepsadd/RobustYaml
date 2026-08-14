@@ -4,7 +4,7 @@
 <linearGradient id="ryTag" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="40" y2="0"><stop offset="0" stop-color="#D4537E"/><stop offset="1" stop-color="#7F77DD"/></linearGradient>
 <linearGradient id="ryGlow" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="40" y2="40"><stop offset="0" stop-color="#7F77DD"/><stop offset=".5" stop-color="#AFA9EC" stop-opacity="0"/><stop offset="1" stop-color="#D4537E"/></linearGradient>
 </defs>
-<rect width="40" height="40" rx="9" fill="url(#ryGlow)" opacity=".3"/>
+<rect width="40" height="40" rx="4" fill="url(#ryGlow)" opacity=".3"/>
 <g fill="#D4537E">
 <rect x="3" y="4" width="5" height="3" rx="1.5"/>
 <rect x="8" y="11" width="5" height="3" rx="1.5"/>

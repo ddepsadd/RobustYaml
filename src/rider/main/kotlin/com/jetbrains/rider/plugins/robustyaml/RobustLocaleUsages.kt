@@ -4,6 +4,7 @@ import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiDocumentManager
@@ -12,6 +13,8 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiReference
 import com.intellij.psi.PsiReferenceBase
+import com.intellij.psi.util.CachedValueProvider
+import com.intellij.psi.util.CachedValuesManager
 
 private val logger = logger<LocaleTextReference>()
 
@@ -54,6 +57,39 @@ class LocaleTextReference(
         document.replaceString(range.startOffset, range.endOffset, newElementName)
         documents.commitDocument(document)
         return file
+    }
+}
+
+/**
+ * The key written at [offset] of a file that only mentions one — a string literal in C#, a `{Loc}`
+ * binding in XAML, a guidebook attribute. The whole file is scanned rather than the line under the
+ * caret: telling a literal from the text of a comment is exactly what the scanner is for, and
+ * `// "comp-thief-target"` must not become a rename target.
+ *
+ * The message has to be one somebody declares. In a `.ftl` the file itself says what a key is, but a
+ * dashed literal in C# is usually not one — `"utf-8"` and `"multipart-form-data"` are strings — and
+ * without the check Shift+F6 would take the refactoring away from ReSharper wherever the caret hit
+ * one of them.
+ *
+ * Cached against the file because both callers are asked on every keystroke: Ctrl+hover goes through
+ * `gotoDeclarationHandler`, and the availability of Shift+F6 is recomputed on every action update.
+ * That last caller is also why the read action is taken here rather than assumed: an action update
+ * is not one, and the index would refuse to answer.
+ */
+internal fun localeUsageAt(file: PsiFile, offset: Int): String? {
+    val extension = file.name.substringAfterLast('.', "")
+    if (!RobustLocaleUsageIndex.mentions(extension)) return null
+    if (DumbService.isDumb(file.project)) return null
+
+    return ReadAction.compute<String?, RuntimeException> {
+        val usages = CachedValuesManager.getCachedValue(file) {
+            CachedValueProvider.Result.create(
+                RobustLocaleUsageIndex.usages(file.viewProvider.contents, extension),
+                file,
+            )
+        }
+        val id = RobustLocaleUsageIndex.at(usages, offset)?.id ?: return@compute null
+        id.takeIf { RobustLocalization.hasMessage(file.project, it) }
     }
 }
 

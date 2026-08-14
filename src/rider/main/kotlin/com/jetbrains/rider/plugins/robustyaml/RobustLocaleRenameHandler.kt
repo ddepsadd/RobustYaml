@@ -14,10 +14,21 @@ import com.intellij.refactoring.rename.RenameHandler
 private val logger = logger<RobustLocaleRenameHandler>()
 
 /**
- * Shift+F6 with the caret inside a `.ftl`. Everywhere else the platform finds what to rename by
- * walking up the PSI, and here there is none to walk: a plain text file is a single token, so the
- * caret would land on the whole file and the refactoring would refuse. The message is read off the
- * line instead, and the declaration it names is handed to the usual rename.
+ * Shift+F6 with the caret on a localization key — inside a `.ftl`, or on the literal that names it in
+ * C#, XAML or a guidebook. In a `.ftl` the platform has nothing to walk up: the file is a single
+ * plain token, so the caret would land on the whole file and the refactoring would refuse. The
+ * message is read off the line instead, and the declaration it names is handed to the usual rename.
+ *
+ * In C# and in XAML this is never asked, and the reason is worth knowing. `CSharpActionSupportPolicyBase`
+ * sends everything but `GotoDeclaration` and `FindUsages` to `BACKEND_ONLY`, and there the whole action
+ * is a `BackendDelegatingAction`: it reads the strategy in `performBackendDelegatingAction` and goes
+ * straight to `executeBackend`. The platform's `RenameElementAction` — and with it the loop in
+ * `FrontendRenameHandlerRegistry` that would have walked this extension point first — never runs, so
+ * no extension can take the refactoring back. Ctrl+click is the way across: from the `.ftl` the rename
+ * works, and it rewrites the C# literals anyway.
+ *
+ * A guidebook `.xml` is a different matter — Rider registers no `backend.actions.support` for XML, so
+ * the strategy is `FrontendOnly` and the key under the caret is renamed from there.
  */
 class RobustLocaleRenameHandler : RenameHandler {
     override fun isAvailableOnDataContext(dataContext: DataContext): Boolean =
@@ -37,9 +48,12 @@ class RobustLocaleRenameHandler : RenameHandler {
 
     private fun messageAt(dataContext: DataContext): String? {
         val file = CommonDataKeys.PSI_FILE.getData(dataContext) ?: return null
-        if (!file.name.endsWith(".${RobustLocaleIndex.EXTENSION}", ignoreCase = true)) return null
-
         val editor = CommonDataKeys.EDITOR.getData(dataContext) ?: return null
-        return RobustLocalization.idAt(file.viewProvider.contents, editor.caretModel.offset)
+        val offset = editor.caretModel.offset
+
+        if (file.name.endsWith(".${RobustLocaleIndex.EXTENSION}", ignoreCase = true)) {
+            return RobustLocalization.idAt(file.viewProvider.contents, offset)
+        }
+        return localeUsageAt(file, offset)
     }
 }

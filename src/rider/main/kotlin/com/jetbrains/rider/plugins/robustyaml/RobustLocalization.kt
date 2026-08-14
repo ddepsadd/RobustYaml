@@ -45,6 +45,15 @@ object RobustLocalization {
 
     fun hasAnyMessage(project: Project): Boolean = keys(project).isNotEmpty()
 
+    /**
+     * Whether the message is declared, answered from the cached key list rather than from the index.
+     * [hasMessage] costs a query apiece, and the sibling check asks about every message-shaped value
+     * of a mapping — `wordReplacements` puts hundreds of them under one key. The list comes out of a
+     * sorted set, so a binary search is all it takes.
+     */
+    fun declaresMessage(project: Project, id: String): Boolean =
+        id.isNotEmpty() && keys(project).binarySearch(id) >= 0
+
     fun sites(project: Project, id: String): List<MessageSite> {
         if (id.isEmpty()) return emptyList()
 
@@ -70,6 +79,19 @@ object RobustLocalization {
 
     fun looksLikeMessageId(id: String): Boolean =
         id.isNotEmpty() && id.first().isLetter() && id.all { it.isLetterOrDigit() || it == '_' || it == '-' }
+
+    /**
+     * The shape a key has to have when nothing but the text claims it is one — the same one the
+     * usage indexes demand. [looksLikeMessageId] is deliberately looser, because a field typed
+     * `LocId` may hold whatever the author wrote; here the text is the only evidence there is.
+     *
+     * A dash is not enough, and the segment after it has to be non-empty:
+     * `metamorphicFillBaseName: fill-` is a prefix of a sprite state, and it sits among
+     * `reagent-name-*` neighbours that do resolve — 150 findings in the reagent files came of it.
+     */
+    fun looksLikeStandaloneMessageId(id: String): Boolean = STANDALONE_ID.matches(id)
+
+    private val STANDALONE_ID = Regex("""[A-Za-z][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)+""")
 
     /**
      * Body of the message declared at [offset]: the text after `=` plus the indented continuation
@@ -204,6 +226,26 @@ object RobustLocalization {
             .distinctBy { it.first }
             .sortedBy { it.first }
 
+    /**
+     * Whether anything in the checkout asks for this message. Five sources are asked, and each of them
+     * cost a measurement to find: values of prototypes, string literals of C#, references from other
+     * messages, `{Loc key}` bindings of XAML and `Key="…"` attributes of guidebooks. Two more are not
+     * lookups at all — a key the engine builds, and a key assembled from a prefix.
+     *
+     * `ent-*` is granted unconditionally: `LocalizationManager.Entity` builds one for every entity
+     * prototype without any file naming it, 13951 of them. That leaves the 389 whose prototype no
+     * longer exists unreported, which is the safe way round to be wrong.
+     *
+     * The affixes are the last resort and the loosest: a key assembled at runtime is nowhere written
+     * whole, so only its head or its tail can be recognised.
+     */
+    fun isUsed(project: Project, id: String): Boolean {
+        if (id.startsWith(ENTITY_PREFIX)) return true
+        if (RobustLocaleUsageIndex.files(project, id).isNotEmpty()) return true
+        if (RobustYamlValueIndex.files(project, id).isNotEmpty()) return true
+        return RobustLocaleAffixIndex.covers(project, id)
+    }
+
     /** Culture of a locale file, taken from the directory right under `Locale`. */
     fun cultureOf(file: VirtualFile): String? {
         var current = file.parent
@@ -231,6 +273,8 @@ object RobustLocalization {
     private fun localeScope(project: Project): GlobalSearchScope = ProjectScope.getAllScope(project)
 
     private const val LOCALE_DIR = "Locale"
+
+    private const val ENTITY_PREFIX = "ent-"
 
     private val DECLARATION = Regex("""﻿?([A-Za-z][\w-]*)[ \t]*=""")
 

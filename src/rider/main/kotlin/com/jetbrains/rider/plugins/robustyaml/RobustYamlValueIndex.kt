@@ -21,7 +21,7 @@ import com.intellij.util.io.KeyDescriptor
 class RobustYamlValueIndex : ScalarIndexExtension<String>() {
     override fun getName(): ID<String, Void> = NAME
 
-    override fun getVersion(): Int = 2
+    override fun getVersion(): Int = 3
 
     override fun dependsOnFileContent(): Boolean = true
 
@@ -49,7 +49,12 @@ class RobustYamlValueIndex : ScalarIndexExtension<String>() {
 
         private val PROTOTYPE_ID = Regex("""[A-Z][A-Za-z0-9]*""")
 
-        private val MESSAGE_ID = Regex("""[a-z][a-z0-9]*(?:-[a-z0-9]+)+""")
+        /**
+         * Upper case and underscores are allowed because keys carry names: `job-description-wardenHelper`,
+         * `contraband-examine-text-GrandTheft`, `tts-voice-name-Cyberpunk_dexter`. A lower-case-only
+         * form left 330 such usages out of the index, and a key nobody can find looks unused.
+         */
+        private val MESSAGE_ID = Regex("""[A-Za-z][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)+""")
 
         fun values(text: CharSequence): Map<String, Void?> {
             val keys = mutableMapOf<String, Void?>()

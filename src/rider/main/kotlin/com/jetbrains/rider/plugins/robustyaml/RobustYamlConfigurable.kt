@@ -31,6 +31,14 @@ class RobustYamlConfigurable(private val project: Project) : BoundConfigurable("
                 .comment("Marks prototype files red in the tree when a component name or prototype id is not found.")
         }
         row {
+            checkBox("Warn about localization messages nobody uses")
+                .bindSelected(state::warnUnusedLocalization)
+                .comment(
+                    "Greys out a message in a .ftl file when no prototype, C# literal, XAML binding, " +
+                        "guidebook or other message asks for it.",
+                )
+        }
+        row {
             checkBox("Align sequence dash with its key")
                 .bindSelected(state::alignSequenceDash)
                 .comment(

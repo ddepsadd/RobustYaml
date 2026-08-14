@@ -64,6 +64,10 @@ object RobustPrototypeIndex {
             )
         }
 
+    /** Whether any prototype is declared under this id — a binary search over the sorted [ids]. */
+    fun declaresId(project: Project, id: String): Boolean =
+        id.isNotEmpty() && ids(project).binarySearch(id) >= 0
+
     fun idsOfKind(project: Project, kind: String): List<String> {
         if (kind.isEmpty()) return emptyList()
         return idsByKind(project).getOrPut(kind) { collectIdsOfKind(project, kind) }

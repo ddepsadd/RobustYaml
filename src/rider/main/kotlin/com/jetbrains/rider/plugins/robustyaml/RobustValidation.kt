@@ -32,6 +32,13 @@ object RobustValidation {
         val suggestions: List<String> = emptyList(),
     )
 
+    /** Like [ScalarProblem], but the offender may be a key of a mapping rather than a value. */
+    data class MessageProblem(
+        val element: PsiElement,
+        val message: String,
+        val suggestions: List<String> = emptyList(),
+    )
+
     private enum class ValueKind(
         val label: String,
         val hint: String = "",
@@ -114,6 +121,90 @@ object RobustValidation {
             else -> emptyList()
         }
     }
+
+    /**
+     * Dead message ids recognised by their neighbours instead of by their type. `wordReplacements` is
+     * declared `Dictionary<string, string>`, and that both sides of it name messages is known only to
+     * the system that reads the field — `ReplacementAccentSystem` hands each of them to
+     * `Loc.GetString`. Tracing that back from a `[DataField]` is dataflow analysis; locality answers
+     * the same question for nothing. Where a mapping holds a crowd of message ids and all but one are
+     * declared, the odd one out is a typo rather than a value of some other kind.
+     *
+     * Two declared neighbours and half the mapping are enough, and the thresholds are not what does
+     * the work: the whole prototype tree of ss14-wega yields 24 findings in 7 files, and the answer
+     * stops moving well below the loosest setting tried. What does the work is the two exclusions —
+     * a key that means an id, and a value that names a prototype. Without the second one
+     * `flavor: raw-egg` reads as a dead message, because `Flavors/flavors.yml` spells reagent
+     * flavours in the same kebab case.
+     *
+     * Seven of the 24 are reached by nothing else: `JobPrototype.Description` is a plain `string?`,
+     * the same trap as `AntagPrototype.Name`, so the typed check never looks at it.
+     */
+    fun siblingLocalizationIds(mapping: YAMLMapping): List<MessageProblem> {
+        val project = mapping.project
+        if (!RobustLocalization.hasAnyMessage(project)) return emptyList()
+
+        val elements = mutableListOf<PsiElement>()
+        val entries = mutableListOf<String>()
+        for (keyValue in mapping.keyValues) {
+            if (RobustYamlContext.isPrototypeIdKey(keyValue.keyText)) continue
+
+            val sides = mutableListOf<Pair<PsiElement, String>>()
+            keyValue.key?.let { sides += it to keyValue.keyText }
+            (keyValue.value as? YAMLScalar)?.let { sides += it to it.textValue }
+
+            // A field the backend typed `LocId` is already checked by `localizationIds`; counting it
+            // here as well would put two warnings on one value.
+            if (sides.isEmpty() || typedField(keyValue)?.localized == true) continue
+
+            elements += sides.map { it.first }
+            entries += sides.map { it.second }
+        }
+
+        val dead = deadSiblings(
+            entries,
+            { RobustLocalization.declaresMessage(project, it) },
+            { RobustPrototypeIndex.declaresId(project, it) },
+        )
+        return dead.map { at ->
+            val id = RobustLocalization.messageId(entries[at].trim())
+            MessageProblem(
+                elements[at],
+                "No localization message with id '$id'",
+                ChangeLocalizationIdFix.suggest(project, id),
+            )
+        }
+    }
+
+    /**
+     * Positions in [entries] that name a message nobody declares, judged against the rest of the
+     * list. Kept free of PSI so a measurement can run the shipped rule over the whole content rather
+     * than a retelling of it — the same reason [accepts] was pulled out of the scalar check.
+     */
+    fun deadSiblings(
+        entries: List<String>,
+        declaresMessage: (String) -> Boolean,
+        declaresPrototype: (String) -> Boolean,
+    ): List<Int> {
+        val ids = HashMap<Int, String>()
+        for ((at, entry) in entries.withIndex()) {
+            val id = RobustLocalization.messageId(entry.trim())
+            if (id.isEmpty() || id.first() in NON_VALUES) continue
+            if (!RobustLocalization.looksLikeStandaloneMessageId(id)) continue
+            // Whatever it is spelled like, a value naming a prototype is not a message:
+            // `flavor: raw-egg` points at `Flavors/flavors.yml`.
+            if (declaresPrototype(id)) continue
+            ids[at] = id
+        }
+        if (ids.isEmpty()) return emptyList()
+
+        val declared = ids.count { declaresMessage(it.value) }
+        if (declared < MIN_DECLARED_SIBLINGS || declared * 2 < ids.size) return emptyList()
+
+        return ids.filterNot { declaresMessage(it.value) }.keys.sorted()
+    }
+
+    private const val MIN_DECLARED_SIBLINGS = 2
 
     private fun checkMessage(project: Project, element: YAMLScalar): ScalarProblem? {
         val raw = element.textValue.trim()

@@ -42,7 +42,7 @@ echo '{}' >"$work/home/product-info.json"
 # Kotlin function needs the interface, and reflection over plugin classes still needs nothing else.
 javac -nowarn -cp "$stdlib" -d "$work" "$here"/*.java
 
-for measurement in ${only:-MeasureHoles MeasureReferences MeasureMigrations MeasureRequired MeasureScalars MeasureLocalization MeasureTags MeasureUsages MeasureLocaleRename MeasureAliases MeasureEntityLoc}; do
+for measurement in ${only:-MeasureHoles MeasureReferences MeasureMigrations MeasureRequired MeasureScalars MeasureLocalization MeasureTags MeasureUsages MeasureLocaleRename MeasureAliases MeasureEntityLoc MeasureSiblings MeasureDeadLocale}; do
   echo "== $measurement"
   java -Didea.home.path="$work/home" \
     -cp "$work:$classes:$stdlib:$dist/lib/*:$dist/plugins/yaml/lib/*" \

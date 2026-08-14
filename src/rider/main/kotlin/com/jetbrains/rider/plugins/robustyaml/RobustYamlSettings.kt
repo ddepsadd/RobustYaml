@@ -14,6 +14,7 @@ class RobustYamlState : BaseState() {
     var alignSequenceDash by property(true)
     var showPrototypeRoot by property(true)
     var highlightProblemFiles by property(true)
+    var warnUnusedLocalization by property(true)
 }
 
 @Service(Service.Level.PROJECT)

@@ -194,6 +194,9 @@ object RobustYamlContext {
         return keyValue.keyText in VALIDATED_ID_KEYS
     }
 
+    /** A key that names a prototype, whatever the value looks like. */
+    fun isPrototypeIdKey(name: String): Boolean = name in PROTOTYPE_ID_KEYS
+
     fun isPrototypeId(scalar: YAMLScalar): Boolean {
         val keyValue = owningKey(scalar) ?: return false
         return keyValue.keyText in PROTOTYPE_ID_KEYS
@@ -205,9 +208,25 @@ object RobustYamlContext {
         return !isPrototypeIdDeclaration(keyValue)
     }
 
+    /**
+     * A value that names a message. The type of the field says so first, and when it does not the
+     * index does: `AntagPrototype.Name` is declared `string`, the content calls `Loc.GetString` on it
+     * at the call site, and by the type alone `name: roles-antag-heretic-name` is not a reference at
+     * all — Ctrl+click did nothing and Alt+F7 answered with the two declarations and no usage. Of the
+     * messages named from prototypes 11224 are reached this way against 2668 through a typed `LocId`.
+     *
+     * The same rule the hover already uses, and safe for the same reason: a dash is required and the
+     * text has to be a message somebody declares, which no prototype id and no component name is.
+     * Guessing wrong costs a soft reference nobody follows; the validator is not widened with it —
+     * warning about an unknown id where the field is a plain `string` would light up half the content.
+     */
     fun isLocalizationValue(scalar: YAMLScalar): Boolean {
         val keyValue = owningKey(scalar) ?: return false
-        return RobustValidation.field(keyValue)?.localized == true
+        if (RobustValidation.field(keyValue)?.localized == true) return true
+
+        val id = RobustLocalization.messageId(scalar.textValue)
+        if ('-' !in id || !RobustLocalization.looksLikeMessageId(id)) return false
+        return RobustLocalization.hasMessage(scalar.project, id)
     }
 
     fun owningKey(scalar: YAMLScalar): YAMLKeyValue? =
