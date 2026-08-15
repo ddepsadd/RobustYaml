@@ -37,7 +37,7 @@ public final class MeasureLocalization {
         Object index = MeasureReferences.companion("RobustLocaleIndex");
         Method messages = index.getClass().getMethod("messages", CharSequence.class);
 
-        Class<?> localization = Class.forName("com.jetbrains.rider.plugins.robustyaml.RobustLocalization");
+        Class<?> localization = MeasureReferences.pluginClass("RobustLocalization");
         Object localizationInstance = localization.getField("INSTANCE").get(null);
         Method messageAt = localization.getMethod("messageAt", CharSequence.class, int.class);
 
@@ -106,7 +106,7 @@ public final class MeasureLocalization {
 
         System.out.println("LocId values checked: " + values + ", missing: " + missing.size());
 
-        Class<?> fix = Class.forName("com.jetbrains.rider.plugins.robustyaml.ChangeLocalizationIdFix");
+        Class<?> fix = MeasureReferences.pluginClass("ChangeLocalizationIdFix");
         Method suggest = fix.getDeclaredClasses()[0].getMethod("suggest", List.class, String.class);
         Object companion = fix.getField("Companion").get(null);
         List<String> all = new ArrayList<>(keys.keySet());

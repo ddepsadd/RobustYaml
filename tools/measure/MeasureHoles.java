@@ -37,7 +37,7 @@ public final class MeasureHoles {
     public static void main(String[] args) throws Exception {
         Path root = Paths.get(args[0]);
 
-        Object companion = Class.forName("com.jetbrains.rider.plugins.robustyaml.RobustComponentNameIndex")
+        Object companion = MeasureReferences.pluginClass("RobustComponentNameIndex")
             .getField("Companion").get(null);
         Method componentNames = companion.getClass().getMethod("componentNames", CharSequence.class);
         Method protoName = companion.getClass().getMethod("protoName", String.class);

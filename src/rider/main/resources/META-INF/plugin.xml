@@ -12,60 +12,62 @@
 
   <extensions defaultExtensionNs="com.intellij">
     <annotator language="yaml"
-               implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustYamlAnnotator" />
+               implementationClass="com.jetbrains.rider.plugins.robustyaml.highlighting.RobustYamlAnnotator" />
     <annotator language="TEXT"
-               implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustUnusedLocalizationAnnotator" />
+               implementationClass="com.jetbrains.rider.plugins.robustyaml.highlighting.RobustUnusedLocalizationAnnotator" />
+    <annotator language="XML"
+               implementationClass="com.jetbrains.rider.plugins.robustyaml.highlighting.RobustGuidebookAnnotator" />
     <additionalLibraryRootsProvider
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeRootsProvider" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.project.RobustPrototypeRootsProvider" />
     <solutionExplorerRootProvider
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeTreeRoot" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.project.RobustPrototypeTreeRoot" />
     <solutionExplorerCustomization
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustSolutionExplorerProblems" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.project.RobustSolutionExplorerProblems" />
     <colorSettingsPage
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlColorSettingsPage" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.highlighting.RobustYamlColorSettingsPage" />
     <colorProvider
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustColorProvider" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.highlighting.RobustColorProvider" />
     <fileBasedIndex
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustComponentNameIndex" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustComponentNameIndex" />
     <fileBasedIndex
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeKindIndex" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustPrototypeKindIndex" />
     <fileBasedIndex
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeIdIndex" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustPrototypeIdIndex" />
     <fileBasedIndex
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeIdsByKindIndex" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustPrototypeIdsByKindIndex" />
     <fileBasedIndex
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustDataFieldIndex" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustDataFieldIndex" />
     <fileBasedIndex
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceIndex" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustYamlReferenceIndex" />
     <fileBasedIndex
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleIndex" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustLocaleIndex" />
     <fileBasedIndex
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlValueIndex" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustYamlValueIndex" />
     <fileBasedIndex
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleUsageIndex" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustLocaleUsageIndex" />
     <fileBasedIndex
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleAffixIndex" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustLocaleAffixIndex" />
     <findUsagesHandlerFactory
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustFindUsagesHandlerFactory" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustFindUsagesHandlerFactory" />
     <targetElementEvaluator
         language="yaml"
-        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustTargetElementEvaluator" />
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.navigation.RobustTargetElementEvaluator" />
     <renamePsiElementProcessor
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustRenameProcessor" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustRenameProcessor" />
     <renamePsiElementProcessor
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleRenameProcessor" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustLocaleRenameProcessor" />
     <renameHandler
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleRenameHandler" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustLocaleRenameHandler" />
     <renameInputValidator
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleNameValidator" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustLocaleNameValidator" />
     <gotoDeclarationHandler
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleDeclarationHandler" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustLocaleDeclarationHandler" />
     <usageTargetProvider
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocaleUsageTargetProvider" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustLocaleUsageTargetProvider" />
     <nonProjectFileWritingAccessExtension
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustFileWritingAccess" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.project.RobustFileWritingAccess" />
     <elementDescriptionProvider
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustElementDescription" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustElementDescription" />
     <localInspection
         language="yaml"
         shortName="RobustUnknownPrototypeId"
@@ -73,7 +75,7 @@
         groupName="Robust YAML"
         level="WARNING"
         enabledByDefault="true"
-        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustUnknownPrototypeIdInspection" />
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.inspection.RobustUnknownPrototypeIdInspection" />
     <localInspection
         language="yaml"
         shortName="RobustDuplicatePrototypeId"
@@ -81,7 +83,7 @@
         groupName="Robust YAML"
         level="ERROR"
         enabledByDefault="true"
-        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustDuplicatePrototypeIdInspection" />
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.inspection.RobustDuplicatePrototypeIdInspection" />
     <localInspection
         language="yaml"
         shortName="RobustInvalidEnumValue"
@@ -89,7 +91,7 @@
         groupName="Robust YAML"
         level="ERROR"
         enabledByDefault="true"
-        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustInvalidEnumValueInspection" />
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.inspection.RobustInvalidEnumValueInspection" />
     <localInspection
         language="yaml"
         shortName="RobustInvalidScalarValue"
@@ -97,7 +99,7 @@
         groupName="Robust YAML"
         level="ERROR"
         enabledByDefault="true"
-        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustInvalidScalarValueInspection" />
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.inspection.RobustInvalidScalarValueInspection" />
     <localInspection
         language="yaml"
         shortName="RobustMissingRequiredField"
@@ -105,7 +107,7 @@
         groupName="Robust YAML"
         level="ERROR"
         enabledByDefault="true"
-        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustMissingRequiredFieldInspection" />
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.inspection.RobustMissingRequiredFieldInspection" />
     <localInspection
         language="yaml"
         shortName="RobustUnknownLocalizationId"
@@ -113,7 +115,7 @@
         groupName="Robust YAML"
         level="WARNING"
         enabledByDefault="true"
-        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustUnknownLocalizationIdInspection" />
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.inspection.RobustUnknownLocalizationIdInspection" />
     <localInspection
         language="yaml"
         shortName="RobustUnknownField"
@@ -121,40 +123,43 @@
         groupName="Robust YAML"
         level="WEAK WARNING"
         enabledByDefault="true"
-        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustUnknownFieldInspection" />
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.inspection.RobustUnknownFieldInspection" />
     <gotoSymbolContributor
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeSymbolContributor" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustPrototypeSymbolContributor" />
     <platform.backend.documentation.targetProvider
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustSpriteDocumentationProvider" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.documentation.RobustSpriteDocumentationProvider" />
     <platform.backend.documentation.targetProvider
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustTypeDocumentationProvider" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.documentation.RobustTypeDocumentationProvider" />
     <platform.backend.documentation.targetProvider
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLocalizationDocumentationProvider" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.documentation.RobustLocalizationDocumentationProvider" />
     <platform.backend.documentation.targetProvider
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustPrototypeDocumentationProvider" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.documentation.RobustPrototypeDocumentationProvider" />
     <psi.referenceContributor
         language="yaml"
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustYamlReferenceContributor" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.reference.RobustYamlReferenceContributor" />
+    <psi.referenceContributor
+        language="XML"
+        implementation="com.jetbrains.rider.plugins.robustyaml.reference.RobustGuidebookReferenceContributor" />
     <codeStyleSettingsModifier
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustCodeStyleModifier" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.editor.RobustCodeStyleModifier" />
     <typedHandler
         order="last"
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustSequenceIndentHandler" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.editor.RobustSequenceIndentHandler" />
     <editorActionHandler
         action="EditorEnter"
         order="last"
-        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustSequenceEnterHandler" />
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.editor.RobustSequenceEnterHandler" />
     <completion.contributor
         language="yaml"
         order="first"
-        implementationClass="com.jetbrains.rider.plugins.robustyaml.RobustComponentCompletionContributor" />
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.completion.RobustComponentCompletionContributor" />
     <lookup.charFilter
-        implementation="com.jetbrains.rider.plugins.robustyaml.RobustLookupCharFilter" />
+        implementation="com.jetbrains.rider.plugins.robustyaml.completion.RobustLookupCharFilter" />
     <projectConfigurable
         id="com.jetbrains.rider.plugins.robustyaml.settings"
         parentId="tools"
         displayName="Robust YAML"
-        instance="com.jetbrains.rider.plugins.robustyaml.RobustYamlConfigurable" />
+        instance="com.jetbrains.rider.plugins.robustyaml.project.RobustYamlConfigurable" />
   </extensions>
 
   <description>

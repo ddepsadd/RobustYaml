@@ -17,10 +17,8 @@ public final class MeasureUsages {
     public static void main(String[] args) throws Exception {
         Path root = Paths.get(args[0]);
 
-        Class<?> index = Class.forName(
-            "com.jetbrains.rider.plugins.robustyaml.RobustYamlValueIndex$Companion");
-        Object instance = Class
-            .forName("com.jetbrains.rider.plugins.robustyaml.RobustYamlValueIndex")
+        Class<?> index = MeasureReferences.pluginClass("RobustYamlValueIndex$Companion");
+        Object instance = MeasureReferences.pluginClass("RobustYamlValueIndex")
             .getField("Companion").get(null);
         Method values = index.getMethod("values", CharSequence.class);
 

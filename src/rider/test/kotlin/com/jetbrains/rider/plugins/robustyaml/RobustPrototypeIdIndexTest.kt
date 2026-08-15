@@ -1,5 +1,6 @@
 package com.jetbrains.rider.plugins.robustyaml
 
+import com.jetbrains.rider.plugins.robustyaml.index.RobustPrototypeIdIndex
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

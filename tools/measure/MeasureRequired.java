@@ -97,7 +97,14 @@ public final class MeasureRequired {
             if (text == null) continue;
             for (Declaration declaration : declarations(text, file)) {
                 all.add(declaration);
-                if (declaration.id != null) byId.putIfAbsent(declaration.id, declaration);
+                // Only entities: an id is unique within a kind and not across kinds, and taking
+                // whichever declaration came first made `cargoProduct MaterialCloth` the parent of
+                // `MaterialCloth10` — three components' worth of keys that the entity of the same
+                // name declares went missing, and with them the required fields they carry. The
+                // plugin walks every declaration of the id and merges them, so it never saw this.
+                if (declaration.id != null && "entity".equals(declaration.kind)) {
+                    byId.putIfAbsent(declaration.id, declaration);
+                }
             }
         }
 

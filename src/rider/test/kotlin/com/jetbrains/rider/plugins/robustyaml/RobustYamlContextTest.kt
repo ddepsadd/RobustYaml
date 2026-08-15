@@ -4,8 +4,8 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.ReadActionCache
-import com.intellij.util.ProcessingContext
 import com.intellij.testFramework.ParsingTestCase
+import com.intellij.util.ProcessingContext
 import org.jetbrains.yaml.YAMLParserDefinition
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLScalar

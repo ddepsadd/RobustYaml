@@ -1,6 +1,8 @@
 package com.jetbrains.rider.plugins.robustyaml
 
 import com.intellij.openapi.editor.impl.DocumentImpl
+import com.jetbrains.rider.plugins.robustyaml.editor.ownerLine
+import com.jetbrains.rider.plugins.robustyaml.editor.sequenceIndent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

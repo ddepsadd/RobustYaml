@@ -38,12 +38,12 @@ public final class MeasureEntityLoc {
         Object index = MeasureReferences.companion("RobustLocaleIndex");
         Method messages = index.getClass().getMethod("messages", CharSequence.class);
 
-        Class<?> localization = Class.forName("com.jetbrains.rider.plugins.robustyaml.RobustLocalization");
+        Class<?> localization = MeasureReferences.pluginClass("RobustLocalization");
         Object instance = localization.getField("INSTANCE").get(null);
         Method entryAt = localization.getMethod("entryAt", CharSequence.class, int.class);
         Method resolved = localization.getMethod("resolved", String.class, int.class, Function1.class);
 
-        Class<?> entryClass = Class.forName("com.jetbrains.rider.plugins.robustyaml.RobustLocalization$Entry");
+        Class<?> entryClass = MeasureReferences.pluginClass("RobustLocalization$Entry");
         Method getValue = entryClass.getMethod("getValue");
         Method getAttributes = entryClass.getMethod("getAttributes");
 

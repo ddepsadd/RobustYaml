@@ -1,5 +1,6 @@
 package com.jetbrains.rider.plugins.robustyaml
 
+import com.jetbrains.rider.plugins.robustyaml.documentation.RobustMarkup
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

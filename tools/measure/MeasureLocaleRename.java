@@ -172,7 +172,7 @@ public final class MeasureLocaleRename {
     }
 
     private static Object companion(String index) throws Exception {
-        return Class.forName("com.jetbrains.rider.plugins.robustyaml." + index)
+        return MeasureReferences.pluginClass(index)
             .getField("Companion").get(null);
     }
 }

@@ -4,8 +4,10 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.util.ReadActionCache
 import com.intellij.testFramework.ParsingTestCase
 import com.intellij.util.ProcessingContext
+import com.jetbrains.rider.plugins.robustyaml.navigation.RobustTargetElementEvaluator
 import org.jetbrains.yaml.YAMLParserDefinition
 import org.jetbrains.yaml.psi.YAMLKeyValue
+import org.jetbrains.yaml.psi.YAMLScalar
 
 /**
  * What the caret stands on for Find Usages. With no reference under it and nothing the platform
@@ -69,6 +71,26 @@ class RobustTargetElementEvaluatorTest : ParsingTestCase("", "yml", YAMLParserDe
 
         assertTrue(named is YAMLKeyValue)
         assertEquals("parent", (named as YAMLKeyValue).keyText)
+    }
+
+    /**
+     * An item of a sequence is named by itself. The key-value above it holds the whole list, so
+     * handing that over would lose the id under the caret — and a rename started from it would
+     * rewrite the one line while the declaration and every other reference stayed as they were.
+     */
+    fun testItemOfASequenceNamesItself() {
+        val named = namedElementAt(
+            """
+            - type: entity
+              id: MobVulpkanin
+              parent:
+              - BaseMobSpecies<caret>Organic
+              - MobBloodstream
+            """,
+        )
+
+        assertTrue(named is YAMLScalar)
+        assertEquals("BaseMobSpeciesOrganic", (named as YAMLScalar).textValue)
     }
 
     fun testNestedIdNamesNothing() {

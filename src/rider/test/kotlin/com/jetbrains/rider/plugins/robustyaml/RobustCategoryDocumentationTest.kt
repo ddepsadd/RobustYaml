@@ -5,6 +5,8 @@ import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.ReadActionCache
 import com.intellij.testFramework.ParsingTestCase
 import com.intellij.util.ProcessingContext
+import com.jetbrains.rider.plugins.robustyaml.documentation.CategoryDeclaration
+import com.jetbrains.rider.plugins.robustyaml.documentation.categoryAt
 import org.jetbrains.yaml.YAMLParserDefinition
 import org.jetbrains.yaml.psi.YAMLKeyValue
 

@@ -1,5 +1,6 @@
 package com.jetbrains.rider.plugins.robustyaml
 
+import com.jetbrains.rider.plugins.robustyaml.index.RobustLocaleAffixIndex
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

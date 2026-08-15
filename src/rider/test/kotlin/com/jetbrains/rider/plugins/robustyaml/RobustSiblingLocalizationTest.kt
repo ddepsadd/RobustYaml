@@ -1,5 +1,6 @@
 package com.jetbrains.rider.plugins.robustyaml
 
+import com.jetbrains.rider.plugins.robustyaml.inspection.RobustValidation
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

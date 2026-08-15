@@ -66,7 +66,7 @@ public final class MeasureScalars {
     public static void main(String[] args) throws Exception {
         Path root = Paths.get(args[0]);
 
-        Class<?> validation = Class.forName("com.jetbrains.rider.plugins.robustyaml.RobustValidation");
+        Class<?> validation = MeasureReferences.pluginClass("RobustValidation");
         Object instance = validation.getField("INSTANCE").get(null);
         Method accepts = validation.getMethod("accepts", String.class, String.class);
 

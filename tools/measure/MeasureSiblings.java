@@ -62,7 +62,7 @@ public final class MeasureSiblings {
             prototypes.addAll(((Map<String, String>) prototypeIds.invoke(ids, text)).keySet());
         }
 
-        Class<?> validation = Class.forName("com.jetbrains.rider.plugins.robustyaml.RobustValidation");
+        Class<?> validation = MeasureReferences.pluginClass("RobustValidation");
         Object instance = validation.getField("INSTANCE").get(null);
         Method deadSiblings = validation.getMethod("deadSiblings", List.class, Function1.class, Function1.class);
         Function1<String, Boolean> declaresMessage = messages::contains;

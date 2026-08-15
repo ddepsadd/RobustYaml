@@ -200,7 +200,7 @@ public final class MeasureDeadLocale {
     }
 
     private static Object companion(String index) throws Exception {
-        return Class.forName("com.jetbrains.rider.plugins.robustyaml." + index)
+        return MeasureReferences.pluginClass(index)
             .getField("Companion").get(null);
     }
 }

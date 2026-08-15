@@ -94,7 +94,29 @@ public final class MeasureReferences {
     }
 
     static Object companion(String simpleName) throws Exception {
-        return Class.forName("com.jetbrains.rider.plugins.robustyaml." + simpleName)
-            .getField("Companion").get(null);
+        return pluginClass(simpleName).getField("Companion").get(null);
     }
+
+    /**
+     * A plugin class by its simple name. The sources are split into packages by their role in the
+     * platform, and a measurement has no business tracking which package a class sits in today —
+     * it calls the shipped code, not a particular file of it. Nested names work as well:
+     * {@code pluginClass("RobustGuidebook$Reference")}.
+     */
+    static Class<?> pluginClass(String name) throws ClassNotFoundException {
+        for (String pkg : PACKAGES) {
+            try {
+                return Class.forName(BASE + pkg + name);
+            } catch (ClassNotFoundException missing) {
+                // The next package, then.
+            }
+        }
+        throw new ClassNotFoundException(BASE + "?." + name);
+    }
+
+    private static final String BASE = "com.jetbrains.rider.plugins.robustyaml.";
+
+    private static final String[] PACKAGES = {
+        "", "index.", "lookup.", "inspection.", "quickfix.", "navigation.", "documentation.",
+    };
 }
