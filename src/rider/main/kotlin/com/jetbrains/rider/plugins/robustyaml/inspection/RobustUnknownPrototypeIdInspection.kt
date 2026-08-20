@@ -16,7 +16,7 @@ class RobustUnknownPrototypeIdInspection : LocalInspectionTool() {
             override fun visitScalar(scalar: YAMLScalar) {
                 val problem = RobustValidation.unknownPrototypeId(scalar) ?: return
                 val fixes = problem.suggestions
-                    .map { ChangePrototypeIdFix(scalar, it) as LocalQuickFix }
+                    .mapIndexed { rank, it -> ChangePrototypeIdFix(scalar, it, rank) as LocalQuickFix }
                     .toTypedArray()
                 holder.registerProblem(scalar, problem.message, highlightOf(problem.critical), *fixes)
             }
@@ -24,7 +24,7 @@ class RobustUnknownPrototypeIdInspection : LocalInspectionTool() {
             override fun visitKeyValue(keyValue: YAMLKeyValue) {
                 for (problem in RobustValidation.prototypeIdValues(keyValue)) {
                     val fixes = problem.suggestions
-                        .map { ChangePrototypeIdFix(problem.element, it) as LocalQuickFix }
+                        .mapIndexed { rank, it -> ChangePrototypeIdFix(problem.element, it, rank) as LocalQuickFix }
                         .toTypedArray()
                     holder.registerProblem(
                         problem.element,

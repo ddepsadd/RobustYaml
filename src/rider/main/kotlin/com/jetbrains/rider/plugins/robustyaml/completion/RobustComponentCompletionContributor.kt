@@ -65,6 +65,35 @@ private fun atKeyPosition(parameters: CompletionParameters): Boolean {
     return !document.charsSequence.subSequence(lineStart, offset).contains(':')
 }
 
+/**
+ * Whether the caret stands where a value goes, and not where a key does.
+ *
+ * [atKeyPosition] alone answers this by the colon left of the caret, which is right for a mapping
+ * and wrong for every item of a block sequence: `- Impassable` has no colon either, so an empty
+ * `- ` under `visMask:` was read as a key and the members of the enum were never offered — one
+ * typed letter did not help, the position is the same. Walking up says it plainly: whichever comes
+ * first, a mapping means a key may be written here, a sequence item means a value.
+ *
+ * The empty item under `components:` stays a key position by the same walk being ambiguous only in
+ * text: `- ` there parses as a scalar item too, but the field behind it has no values to offer, so
+ * the key branch is the one that answers.
+ */
+internal fun atSequenceItemValue(position: PsiElement): Boolean {
+    var current: PsiElement? = position
+    while (current != null) {
+        when (current) {
+            is YAMLMapping -> return false
+            is YAMLSequenceItem -> return true
+            else -> current = current.parent
+        }
+    }
+    return false
+}
+
+/** A key of a mapping, as opposed to an item of a sequence that merely looks like one. */
+private fun atMappingKey(parameters: CompletionParameters, position: PsiElement): Boolean =
+    atKeyPosition(parameters) && !atSequenceItemValue(position)
+
 class RobustComponentCompletionContributor : CompletionContributor() {
     init {
         extend(CompletionType.BASIC, PlatformPatterns.psiElement(), TypeTagProvider)
@@ -305,7 +334,7 @@ private object EnumValueProvider : CompletionProvider<CompletionParameters>() {
     ) {
         val position = parameters.position
         val field = RobustValidation.fieldAround(position) ?: return
-        val values = if (atKeyPosition(parameters)) field.keyValues else field.values
+        val values = if (atMappingKey(parameters, position)) field.keyValues else field.values
         logger.debug { "Enum values for '${field.name}: ${field.type}': ${values.size}" }
         if (values.isEmpty()) return
 
@@ -323,7 +352,7 @@ private object ColorNameProvider : CompletionProvider<CompletionParameters>() {
         result: CompletionResultSet,
     ) {
         val position = parameters.position
-        if (atKeyPosition(parameters)) return
+        if (atMappingKey(parameters, position)) return
 
         val field = RobustValidation.fieldAround(position) ?: return
         if (!RobustValidation.isColorField(field)) return
@@ -342,7 +371,7 @@ private object LocalizationIdProvider : CompletionProvider<CompletionParameters>
         result: CompletionResultSet,
     ) {
         val position = parameters.position
-        if (atKeyPosition(parameters)) return
+        if (atMappingKey(parameters, position)) return
 
         val field = RobustValidation.fieldAround(position) ?: return
         if (!field.localized) return

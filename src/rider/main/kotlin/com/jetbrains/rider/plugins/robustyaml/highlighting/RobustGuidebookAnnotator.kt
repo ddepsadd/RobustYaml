@@ -21,8 +21,8 @@ class RobustGuidebookAnnotator : Annotator {
 
         var builder = holder.newAnnotation(HighlightSeverity.ERROR, problem.message)
             .range(value)
-        for (suggestion in problem.suggestions) {
-            builder = builder.withFix(ChangePrototypeIdFix(value, suggestion))
+        for ((rank, suggestion) in problem.suggestions.withIndex()) {
+            builder = builder.withFix(ChangePrototypeIdFix(value, suggestion, rank))
         }
         builder.create()
     }

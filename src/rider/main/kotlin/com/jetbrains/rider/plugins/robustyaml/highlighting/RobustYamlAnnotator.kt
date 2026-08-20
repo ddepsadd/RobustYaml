@@ -58,8 +58,8 @@ class RobustYamlAnnotator : Annotator {
         val problem = RobustValidation.unknownField(keyValue) ?: return
         var builder = holder.newAnnotation(HighlightSeverity.WEAK_WARNING, problem.message)
             .range(keyValue.key ?: keyValue)
-        for (suggestion in problem.suggestions) {
-            builder = builder.withFix(ChangeFieldNameFix(keyValue, suggestion))
+        for ((rank, suggestion) in problem.suggestions.withIndex()) {
+            builder = builder.withFix(ChangeFieldNameFix(keyValue, suggestion, rank))
         }
         builder.create()
     }
@@ -69,8 +69,8 @@ class RobustYamlAnnotator : Annotator {
         val tag = ChangeTypeTagFix.tagOf(carrier) ?: return
 
         var builder = holder.newAnnotation(HighlightSeverity.ERROR, problem.message).range(tag)
-        for (suggestion in problem.suggestions) {
-            builder = builder.withFix(ChangeTypeTagFix(carrier, suggestion))
+        for ((rank, suggestion) in problem.suggestions.withIndex()) {
+            builder = builder.withFix(ChangeTypeTagFix(carrier, suggestion, rank))
         }
         builder.create()
     }
@@ -88,8 +88,8 @@ class RobustYamlAnnotator : Annotator {
             var builder = holder.newAnnotation(severity, problem.message)
                 .range(problem.element)
             if (!problem.critical) builder = builder.enforcedTextAttributes(RobustYamlColors.waveAttributes(false))
-            for (suggestion in problem.suggestions) {
-                builder = builder.withFix(ChangePrototypeIdFix(problem.element, suggestion))
+            for ((rank, suggestion) in problem.suggestions.withIndex()) {
+                builder = builder.withFix(ChangePrototypeIdFix(problem.element, suggestion, rank))
             }
             builder.create()
         }
@@ -99,8 +99,8 @@ class RobustYamlAnnotator : Annotator {
         for (problem in RobustValidation.enumValues(keyValue)) {
             var builder = holder.newAnnotation(HighlightSeverity.ERROR, problem.message)
                 .range(problem.element)
-            for (suggestion in problem.suggestions) {
-                builder = builder.withFix(ChangeEnumValueFix(problem.element, suggestion))
+            for ((rank, suggestion) in problem.suggestions.withIndex()) {
+                builder = builder.withFix(ChangeEnumValueFix(problem.element, suggestion, rank))
             }
             builder.create()
         }
@@ -129,8 +129,8 @@ class RobustYamlAnnotator : Annotator {
             var builder = holder.newAnnotation(HighlightSeverity.WARNING, problem.message)
                 .range(problem.element)
                 .enforcedTextAttributes(RobustYamlColors.waveAttributes(false))
-            for (suggestion in problem.suggestions) {
-                builder = builder.withFix(ChangeLocalizationIdFix(problem.element, suggestion))
+            for ((rank, suggestion) in problem.suggestions.withIndex()) {
+                builder = builder.withFix(ChangeLocalizationIdFix(problem.element, suggestion, rank))
             }
             builder.create()
         }
@@ -144,8 +144,8 @@ class RobustYamlAnnotator : Annotator {
             // The offender may be a key of the mapping, and only a scalar can be rewritten in place.
             val scalar = problem.element as? YAMLScalar
             if (scalar != null) {
-                for (suggestion in problem.suggestions) {
-                    builder = builder.withFix(ChangeLocalizationIdFix(scalar, suggestion))
+                for ((rank, suggestion) in problem.suggestions.withIndex()) {
+                    builder = builder.withFix(ChangeLocalizationIdFix(scalar, suggestion, rank))
                 }
             }
             builder.create()
@@ -160,8 +160,8 @@ class RobustYamlAnnotator : Annotator {
         if (!problem.critical) {
             builder = builder.enforcedTextAttributes(RobustYamlColors.waveAttributes(false))
         }
-        for (suggestion in problem.suggestions) {
-            builder = builder.withFix(ChangePrototypeIdFix(scalar, suggestion))
+        for ((rank, suggestion) in problem.suggestions.withIndex()) {
+            builder = builder.withFix(ChangePrototypeIdFix(scalar, suggestion, rank))
         }
         builder.create()
     }
@@ -200,8 +200,8 @@ class RobustYamlAnnotator : Annotator {
 
         var builder = holder.newAnnotation(HighlightSeverity.ERROR, "Unknown component '$name'")
             .range(scalar)
-        for (suggestion in ChangeComponentNameFix.suggest(project, name)) {
-            builder = builder.withFix(ChangeComponentNameFix(scalar, suggestion))
+        for ((rank, suggestion) in ChangeComponentNameFix.suggest(project, name).withIndex()) {
+            builder = builder.withFix(ChangeComponentNameFix(scalar, suggestion, rank))
         }
         builder.create()
     }

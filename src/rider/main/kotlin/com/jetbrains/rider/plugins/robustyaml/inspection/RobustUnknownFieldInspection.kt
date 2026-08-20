@@ -14,7 +14,7 @@ class RobustUnknownFieldInspection : LocalInspectionTool() {
             override fun visitKeyValue(keyValue: YAMLKeyValue) {
                 val problem = RobustValidation.unknownField(keyValue) ?: return
                 val fixes = problem.suggestions
-                    .map { ChangeFieldNameFix(keyValue, it) }
+                    .mapIndexed { rank, it -> ChangeFieldNameFix(keyValue, it, rank) }
                     .toTypedArray()
                 holder.registerProblem(
                     keyValue.key ?: keyValue,

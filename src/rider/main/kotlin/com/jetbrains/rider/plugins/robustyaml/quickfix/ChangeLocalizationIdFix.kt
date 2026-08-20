@@ -3,7 +3,6 @@ package com.jetbrains.rider.plugins.robustyaml.quickfix
 import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
-import com.intellij.psi.ElementManipulators
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.util.text.EditDistance
@@ -11,8 +10,11 @@ import com.jetbrains.rider.plugins.robustyaml.lookup.RobustLocalization
 import org.jetbrains.yaml.psi.YAMLScalar
 import kotlin.math.abs
 
-class ChangeLocalizationIdFix(scalar: YAMLScalar, private val newId: String) :
-    LocalQuickFixAndIntentionActionOnPsiElement(scalar) {
+class ChangeLocalizationIdFix(
+    scalar: YAMLScalar,
+    private val newId: String,
+    override val rank: Int = 0,
+) : LocalQuickFixAndIntentionActionOnPsiElement(scalar), RankedFix {
 
     override fun getText(): String = "Change to '$newId'"
 
@@ -25,8 +27,7 @@ class ChangeLocalizationIdFix(scalar: YAMLScalar, private val newId: String) :
         startElement: PsiElement,
         endElement: PsiElement,
     ) {
-        val manipulator = ElementManipulators.getManipulator(startElement) ?: return
-        manipulator.handleContentChange(startElement, newId)
+        rewriteContent(startElement, newId, editor)
     }
 
     companion object {

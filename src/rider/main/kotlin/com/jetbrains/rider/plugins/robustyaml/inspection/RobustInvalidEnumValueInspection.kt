@@ -15,7 +15,7 @@ class RobustInvalidEnumValueInspection : LocalInspectionTool() {
             override fun visitKeyValue(keyValue: YAMLKeyValue) {
                 for (problem in RobustValidation.enumValues(keyValue)) {
                     val fixes = problem.suggestions
-                        .map { ChangeEnumValueFix(problem.element, it) as LocalQuickFix }
+                        .mapIndexed { rank, it -> ChangeEnumValueFix(problem.element, it, rank) as LocalQuickFix }
                         .toTypedArray()
                     holder.registerProblem(
                         problem.element,

@@ -3,15 +3,17 @@ package com.jetbrains.rider.plugins.robustyaml.quickfix
 import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
-import com.intellij.psi.ElementManipulators
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.util.text.EditDistance
 import com.jetbrains.rider.plugins.robustyaml.lookup.RobustComponentIndex
 import org.jetbrains.yaml.psi.YAMLScalar
 
-class ChangeComponentNameFix(scalar: YAMLScalar, private val newName: String) :
-    LocalQuickFixAndIntentionActionOnPsiElement(scalar) {
+class ChangeComponentNameFix(
+    scalar: YAMLScalar,
+    private val newName: String,
+    override val rank: Int = 0,
+) : LocalQuickFixAndIntentionActionOnPsiElement(scalar), RankedFix {
 
     override fun getText(): String = "Change to '$newName'"
 
@@ -24,8 +26,7 @@ class ChangeComponentNameFix(scalar: YAMLScalar, private val newName: String) :
         startElement: PsiElement,
         endElement: PsiElement,
     ) {
-        val manipulator = ElementManipulators.getManipulator(startElement) ?: return
-        manipulator.handleContentChange(startElement, newName)
+        rewriteContent(startElement, newName, editor)
     }
 
     companion object {

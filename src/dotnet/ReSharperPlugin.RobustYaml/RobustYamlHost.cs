@@ -296,7 +296,7 @@ namespace ReSharperPlugin.RobustYaml
                 .GetOrCreateModuleResolveContext(containing, module, module.TargetFrameworkId);
         }
 
-        private static List<Field> Collect(ITypeElement root)
+        private List<Field> Collect(ITypeElement root)
         {
             var result = new List<Field>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -350,7 +350,7 @@ namespace ReSharperPlugin.RobustYaml
                         PrototypeKind = kinds.Value,
                         KeyPrototypeKind = kinds.Key,
                         CustomSerializer = SerializerArgument(attribute) != null,
-                        Constants = ConstantValues(attribute, type),
+                        Constants = ConstantValues(attribute, type) ?? FlagValues(attribute),
                     });
                 }
 
@@ -557,6 +557,65 @@ namespace ReSharperPlugin.RobustYaml
             return null;
         }
 
+        /// <summary>
+        /// Values a <c>FlagSerializer&lt;TTag&gt;</c> accepts: the members of the enum marked
+        /// <c>[FlagsFor(typeof(TTag))]</c>, which is how <c>SerializationManager</c> builds its own
+        /// mapping — one enum per tag, or it throws.
+        ///
+        /// <para>
+        /// The name trick that finds the enum of a <c>ConstantSerializer</c> is useless here: of the
+        /// three tags in the content only <c>AtmosDirectionFlags</c> resembles its enum
+        /// (<c>AtmosDirection</c>), while <c>CollisionLayer</c> and <c>CollisionMask</c> both map to
+        /// <c>CollisionGroup</c> and <c>VisibilityMaskLayer</c> to <c>VisibilityFlags</c>. So the tag
+        /// is searched for instead: it is referenced by the attribute that names it and by the
+        /// handful of fields serialized with it — three places for the widest of them. The domain is
+        /// the whole solution on purpose, for the same reason the constants search runs in the full
+        /// symbol scope: the tags live in <c>Robust.Shared</c>, the enums in <c>Content.Shared</c>,
+        /// and the engine does not reference the content.
+        /// </para>
+        ///
+        /// <para>
+        /// An enum that came from a compiled assembly carries no declaration to find, so nothing is
+        /// returned and the field keeps an empty value list — which reads as "nothing is known here",
+        /// leaving validation silent instead of wrong.
+        /// </para>
+        /// </summary>
+        private List<string> FlagValues(IAttribute attribute)
+        {
+            var serializer = SerializerArgument(attribute) as IDeclaredType;
+            if (serializer?.GetTypeElement()?.ShortName != FlagSerializer)
+                return null;
+
+            var tag = (LastTypeArgument(serializer) as IDeclaredType)?.GetTypeElement();
+            if (tag == null)
+                return null;
+
+            var domain = SearchDomainFactory.Instance.CreateSearchDomain(mySolution, false);
+            var references = tag.GetPsiServices().Finder
+                .FindReferences(tag, domain, NullProgressIndicator.Create());
+
+            foreach (var reference in references)
+            {
+                var marker = reference.GetTreeNode()?.GetContainingNode<IAttribute>();
+                if (marker == null || WithoutSuffix(marker.Name?.ShortName) != FlagsForAttribute)
+                    continue;
+
+                var declaration = marker.GetContainingNode<IAttributesOwnerDeclaration>();
+                var enumeration = declaration?.DeclaredElement as IEnum;
+                if (enumeration == null)
+                    continue;
+
+                var members = enumeration.EnumMembers
+                    .Where(it => it.IsEnumMember)
+                    .Select(it => it.ShortName)
+                    .ToList();
+                if (members.Count > 0)
+                    return members;
+            }
+
+            return null;
+        }
+
         private static bool IsLocalized(IType type, IPsiModule module)
         {
             var declared = UnwrapType(type, module).Unlift() as IDeclaredType;
@@ -709,6 +768,8 @@ namespace ReSharperPlugin.RobustYaml
         private const string LocId = "LocId";
         private const string ConstantSerializer = "ConstantSerializer";
         private const string ConstantsForAttribute = "ConstantsFor";
+        private const string FlagSerializer = "FlagSerializer";
+        private const string FlagsForAttribute = "FlagsFor";
         private const string EntityKind = "entity";
         private const string DictionarySerializer = "DictionarySerializer";
         private const string ValueDictionarySerializer = "ValueDictionarySerializer";

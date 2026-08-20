@@ -9,8 +9,11 @@ import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.util.text.EditDistance
 import org.jetbrains.yaml.psi.YAMLKeyValue
 
-class ChangeFieldNameFix(keyValue: YAMLKeyValue, private val newName: String) :
-    LocalQuickFixAndIntentionActionOnPsiElement(keyValue) {
+class ChangeFieldNameFix(
+    keyValue: YAMLKeyValue,
+    private val newName: String,
+    override val rank: Int = 0,
+) : LocalQuickFixAndIntentionActionOnPsiElement(keyValue), RankedFix {
 
     override fun getText(): String = "Change to '$newName'"
 
@@ -26,7 +29,9 @@ class ChangeFieldNameFix(keyValue: YAMLKeyValue, private val newName: String) :
         val keyValue = startElement as? YAMLKeyValue
             ?: PsiTreeUtil.getParentOfType(startElement, YAMLKeyValue::class.java, false)
             ?: return
+        val start = contentStart(keyValue)
         keyValue.setName(newName)
+        editor?.caretModel?.moveToOffset(start + newName.length)
     }
 
     companion object {

@@ -80,6 +80,48 @@ class RobustValidationTest {
         assertRejects("float?", "fast")
     }
 
+    /**
+     * `Enum.Parse` splits a scalar on commas itself, so one value can name several members and the
+     * sequence form is only the other way of writing the same thing.
+     */
+    @Test
+    fun `a scalar may name several members`() {
+        assertMembers("Impassable, Opaque")
+        assertMembers("Impassable,Opaque")
+        assertUnknown("Impassable, Opake", "Opake")
+    }
+
+    /**
+     * `ReadEnumValue` parses with ignoreCase, a custom serializer does not — and the content relies
+     * on the first: `anchored: True` next to `state: BELT`.
+     */
+    @Test
+    fun `case matters only for a custom serializer`() {
+        assertEquals(emptyList<String>(), unknown("impassable", exact = false))
+        assertEquals(listOf("impassable"), unknown("impassable", exact = true))
+    }
+
+    /** Numbers are members too as far as the engine is concerned, and a tag is not a value at all. */
+    @Test
+    fun `only identifiers are looked up`() {
+        assertMembers("4")
+        assertMembers("-1")
+        assertMembers("!type:PolygonShape")
+        assertMembers("*BaseAnchor")
+        assertMembers("null")
+    }
+
+    private fun unknown(raw: String, exact: Boolean): List<String> =
+        RobustValidation.unknownMembers(listOf("None", "Impassable", "Opaque"), raw, exact)
+
+    private fun assertMembers(raw: String) {
+        assertEquals("'$raw' should raise nothing", emptyList<String>(), unknown(raw, exact = true))
+    }
+
+    private fun assertUnknown(raw: String, vararg names: String) {
+        assertEquals(names.toList(), unknown(raw, exact = true))
+    }
+
     private fun assertAccepts(type: String, vararg values: String) {
         for (value in values) {
             assertEquals("$type should accept '$value'", true, RobustValidation.accepts(type, value))

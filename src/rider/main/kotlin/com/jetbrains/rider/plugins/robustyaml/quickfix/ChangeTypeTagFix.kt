@@ -14,8 +14,11 @@ import com.jetbrains.rider.plugins.robustyaml.RobustYamlContext
  * well. The replacement therefore goes through the document, and the fix holds the carrier of the
  * tag rather than the token — PSI is rebuilt between building the fix and applying it.
  */
-class ChangeTypeTagFix(carrier: PsiElement, private val newType: String) :
-    LocalQuickFixAndIntentionActionOnPsiElement(carrier) {
+class ChangeTypeTagFix(
+    carrier: PsiElement,
+    private val newType: String,
+    override val rank: Int = 0,
+) : LocalQuickFixAndIntentionActionOnPsiElement(carrier), RankedFix {
 
     override fun getText(): String = "Change to '$newType'"
 

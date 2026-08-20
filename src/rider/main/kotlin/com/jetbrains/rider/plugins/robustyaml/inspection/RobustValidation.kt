@@ -237,24 +237,37 @@ object RobustValidation {
         )
     }
 
+    /**
+     * Whether the spelling of a value has to match the declaration exactly.
+     *
+     * A plain enum datafield is read by `SerializationManager.ReadEnumValue`, which is
+     * `Enum.Parse(value, true)` — the content writes both `Belt` and `BELT`. Values that come from a
+     * custom serializer are read by that serializer instead, and both of the ones that produce a list
+     * of names — `ConstantSerializer` and `FlagSerializer` — call `Enum.Parse` without the flag, so
+     * there `belowMobs` is a load-time error. The distinction costs nothing on the checkout: all 398
+     * `drawdepth` values are spelled exactly as the enum declares them, as are all flag values.
+     */
+    private fun caseSensitive(field: RobustDataField): Boolean = field.customSerializer
+
     fun enumValues(keyValue: YAMLKeyValue): List<EnumProblem> {
         val field = typedField(keyValue) ?: return emptyList()
         if (field.values.isEmpty() && field.keyValues.isEmpty()) return emptyList()
 
+        val exact = caseSensitive(field)
         val problems = mutableListOf<EnumProblem>()
         when (val value = keyValue.value) {
             is YAMLMapping ->
                 for (entry in value.keyValues) {
                     val key = entry.key as? YAMLScalar ?: continue
-                    checkEnum(field.keyValues, key, entry.keyText)?.let { problems += it }
+                    checkEnum(field.keyValues, key, entry.keyText, exact)?.let { problems += it }
                 }
             is YAMLSequence ->
                 for (item in value.items) {
                     val scalar = item.value as? YAMLScalar ?: continue
-                    checkEnum(field.values, scalar, scalar.textValue)?.let { problems += it }
+                    checkEnum(field.values, scalar, scalar.textValue, exact)?.let { problems += it }
                 }
             is YAMLScalar ->
-                checkEnum(field.values, value, value.textValue)?.let { problems += it }
+                checkEnum(field.values, value, value.textValue, exact)?.let { problems += it }
             else -> {}
         }
         return problems
@@ -358,13 +371,15 @@ object RobustValidation {
         return DECIMAL_FORM.matches(raw.dropLast(1))
     }
 
-    private fun checkEnum(values: List<String>, element: YAMLScalar, raw: String): EnumProblem? {
+    private fun checkEnum(
+        values: List<String>,
+        element: YAMLScalar,
+        raw: String,
+        exact: Boolean,
+    ): EnumProblem? {
         if (values.isEmpty()) return null
 
-        val parts = raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-        if (parts.isEmpty() || parts.any { !looksLikeEnumValue(it) }) return null
-
-        val unknown = parts.filter { part -> values.none { it.equals(part, ignoreCase = true) } }
+        val unknown = unknownMembers(values, raw, exact)
         if (unknown.isEmpty()) return null
 
         val name = unknown.first()
@@ -375,6 +390,25 @@ object RobustValidation {
             "Unknown enum value '$name'$expected",
             ChangeEnumValueFix.suggest(name, values),
         )
+    }
+
+    /**
+     * Members of [values] that [raw] names and the declaration does not have, empty when the value is
+     * not a list of member names at all.
+     *
+     * One scalar carries several names: `Enum.Parse` splits on commas itself, so `mask: Impassable,
+     * Opaque` is as legal as the sequence form, and every part is looked up on its own. Numbers are
+     * left alone because `Enum.Parse` takes them too, and so is anything that is not an identifier —
+     * a tag, an alias or `null` says the value is of another kind entirely, not that it is wrong.
+     *
+     * Public because a measurement calls it: the rules are then the shipped ones rather than a
+     * retelling, the same reason [accepts] was pulled out of the scalar check.
+     */
+    fun unknownMembers(values: List<String>, raw: String, exact: Boolean): List<String> {
+        val parts = raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        if (parts.isEmpty() || parts.any { !looksLikeEnumValue(it) }) return emptyList()
+
+        return parts.filter { part -> values.none { it.equals(part, ignoreCase = !exact) } }
     }
 
     private fun looksLikeEnumValue(text: String): Boolean {
