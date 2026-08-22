@@ -137,6 +137,119 @@ public final class MeasureTypedIds {
             System.out.println("Names taken for prototype ids whose values are mostly not ids: " + wrong);
             System.exit(1);
         }
+
+        dictionaries(root, prototypes, declared, otherwise);
+    }
+
+    /**
+     * The other half of the rule: a datafield declared {@code Dictionary<_, ProtoId>} writes a
+     * mapping whose keys the author invents and whose values are ids — {@code mask:
+     * ClothingMaskBreath} under {@code equipment:}. Nothing else in the plugin can reach that value:
+     * the name above it is a datafield of nothing, and would be rejected as ambiguous even if it
+     * were one. Bounded the same way, by the values under an accepted name that are no ids at all.
+     */
+    @SuppressWarnings("unchecked")
+    private static void dictionaries(Path root, List<Path> prototypes, Set<String> declared, Set<String> otherwise)
+        throws Exception {
+        Object fields = MeasureReferences.companion("RobustDataFieldIndex");
+        Method index = fields.getClass().getMethod("index", CharSequence.class);
+        String prefix = (String) MeasureReferences.pluginClass("RobustDataFieldIndex")
+            .getDeclaredField("PROTOTYPE_VALUE_FIELD_KEY").get(null);
+
+        Set<String> named = new java.util.TreeSet<>();
+        for (Path file : MeasureHoles.sources(root, ".cs")) {
+            String text = MeasureHoles.read(file);
+            if (text == null) continue;
+            for (String key : ((Map<String, String>) index.invoke(fields, text)).keySet()) {
+                if (key.startsWith(prefix)) named.add(key.substring(prefix.length()));
+            }
+        }
+        int declaredNames = named.size();
+        named.removeAll(otherwise);
+
+        Map<String, int[]> perKey = new TreeMap<>();
+        Map<String, List<String>> strangers = new TreeMap<>();
+        for (Path file : prototypes) {
+            String text = MeasureHoles.read(file);
+            if (text == null) continue;
+            for (Map.Entry<String, String> value : valuesInMappings(text, named)) {
+                int[] counts = perKey.computeIfAbsent(value.getKey(), k -> new int[2]);
+                counts[0]++;
+                if (declared.contains(value.getValue())) {
+                    counts[1]++;
+                } else if (strangers.computeIfAbsent(value.getKey(), k -> new ArrayList<>()).size() < 4) {
+                    strangers.get(value.getKey()).add(value.getValue() + "   (" + root.relativize(file) + ")");
+                }
+            }
+        }
+
+        System.out.println();
+        System.out.println("names holding ids in the values of a mapping: " + declaredNames
+            + ", of them rejected as ambiguous: " + (declaredNames - named.size()));
+        System.out.println("accepted: " + named);
+        int total = perKey.values().stream().mapToInt(c -> c[0]).sum();
+        int ids = perKey.values().stream().mapToInt(c -> c[1]).sum();
+        System.out.println("values under them: " + total + ", references gained: " + ids);
+
+        int strange = 0;
+        for (Map.Entry<String, int[]> entry : perKey.entrySet()) {
+            int missing = entry.getValue()[0] - entry.getValue()[1];
+            if (missing == 0) continue;
+            strange += missing;
+            System.out.println("   " + entry.getKey() + ": " + missing + " of " + entry.getValue()[0]
+                + " -> " + strangers.getOrDefault(entry.getKey(), List.of()));
+        }
+        System.out.println("NOT AN ID IN A MAPPING: " + strange);
+
+        List<String> wrong = new ArrayList<>();
+        for (Map.Entry<String, int[]> entry : perKey.entrySet()) {
+            int missing = entry.getValue()[0] - entry.getValue()[1];
+            if (missing > entry.getValue()[1]) wrong.add(entry.getKey() + " (" + missing
+                + " of " + entry.getValue()[0] + ")");
+        }
+        if (!wrong.isEmpty()) {
+            System.out.println();
+            System.out.println("Dictionary names whose values are mostly not ids: " + wrong);
+            System.exit(1);
+        }
+    }
+
+    /**
+     * Values written inside the mapping under any of [keys] — one per line, or as items of a list
+     * where the value type is a collection. The inline form ({@code equipment: {mask: X}}) is not
+     * read: the content writes none, and a brace on the key line ends the block here as it does for
+     * the plugin's own walk over PSI.
+     */
+    private static List<Map.Entry<String, String>> valuesInMappings(String text, Set<String> keys) {
+        List<Map.Entry<String, String>> found = new ArrayList<>();
+        String open = null;
+        int openIndent = 0;
+        for (String raw : text.split("\n", -1)) {
+            String line = strip(raw);
+            if (line.isBlank()) continue;
+
+            int indent = line.length() - line.stripLeading().length();
+            if (open != null && indent <= openIndent) open = null;
+
+            Matcher entry = ENTRY.matcher(line);
+            if (open == null) {
+                if (entry.matches() && keys.contains(entry.group(2)) && entry.group(3).trim().isEmpty()) {
+                    open = entry.group(2);
+                    openIndent = entry.group(1).length();
+                }
+                continue;
+            }
+
+            if (entry.matches()) {
+                for (String item : items(entry.group(3).trim())) found.add(Map.entry(open, item));
+                continue;
+            }
+            Matcher item = ITEM.matcher(line);
+            if (item.matches() && looksLikeId(item.group(2).trim())) {
+                found.add(Map.entry(open, unquote(item.group(2).trim())));
+            }
+        }
+        return found;
     }
 
     /** Values written under any of [keys], flat: a scalar, an inline list or a block sequence. */

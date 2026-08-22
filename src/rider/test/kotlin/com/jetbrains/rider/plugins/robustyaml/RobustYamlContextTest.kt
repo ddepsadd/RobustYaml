@@ -272,6 +272,57 @@ class RobustYamlContextTest : ParsingTestCase("", "yml", YAMLParserDefinition())
         assertEquals("Crowbar", RobustYamlContext.resolvedText(declaration.value))
     }
 
+    /**
+     * Under a datafield declared a dictionary the names of the keys belong to the author — slots of
+     * `equipment:`, one per line — so the only thing that knows what stands to the right of `mask:`
+     * is the key above the mapping.
+     */
+    fun testAKeyOfANestedMappingIsOwnedByTheKeyAboveIt() {
+        val file = parse(
+            """
+            - type: chameleonOutfit
+              id: IAAChameleonOutfit
+              equipment:
+                mask: ClothingMaskBreath
+            """,
+        )
+
+        assertEquals("equipment", RobustYamlContext.mappingOwner(key(file, "mask"))?.keyText)
+    }
+
+    /** A key of the declaration itself belongs to nobody: its mapping is an item of the document. */
+    fun testAKeyOfTheDeclarationHasNoOwner() {
+        val file = parse(
+            """
+            - type: entity
+              id: Crowbar
+            """,
+        )
+
+        assertNull(RobustYamlContext.mappingOwner(key(file, "id")))
+    }
+
+    /** The owner is the nearest one, not the outermost: `fix1` is owned by `fixtures`, not by `type`. */
+    fun testTheOwnerIsTheNearestKeyAbove() {
+        val file = parse(
+            """
+            - type: entity
+              id: Crowbar
+              components:
+              - type: Fixtures
+                fixtures:
+                  fix1:
+                    density: 20
+            """,
+        )
+
+        assertEquals("fixtures", RobustYamlContext.mappingOwner(key(file, "fix1"))?.keyText)
+        assertEquals("fix1", RobustYamlContext.mappingOwner(key(file, "density"))?.keyText)
+    }
+
+    private fun key(file: PsiFile, name: String): YAMLKeyValue =
+        PsiTreeUtil.findChildrenOfType(file, YAMLKeyValue::class.java).first { it.keyText == name }
+
     private fun parse(text: String): PsiFile = createPsiFile("test", text.trimIndent())
 
     private fun originAt(text: String): RobustYamlContext.Origin {

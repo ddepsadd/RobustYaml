@@ -159,7 +159,7 @@ private object PrototypeIdReferenceProvider : PsiReferenceProvider() {
         if (RobustYamlContext.isPrototypeIdReference(scalar)) return true
 
         val keyValue = RobustYamlContext.owningKey(scalar) ?: return false
-        return RobustDataFields.namesPrototype(scalar.project, keyValue.keyText)
+        return RobustDataFields.namesPrototype(keyValue)
     }
 }
 

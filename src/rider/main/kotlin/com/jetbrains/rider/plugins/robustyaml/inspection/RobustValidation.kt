@@ -104,21 +104,35 @@ object RobustValidation {
         val critical = keyValue.keyText == PARENT_KEY
         val problems = mutableListOf<IdProblem>()
         when (val value = keyValue.value) {
+            // A mapping has two halves and both can hold ids: `Dictionary<ProtoId<X>, int>` writes
+            // them as its keys, `Dictionary<string, EntProtoId>` as its values. Only the keys were
+            // ever read, so `cash: {1: Telecrysta}` was a dead reference nothing could see — the key
+            // above the value is a slot name the author invented, and the type is known one level up.
             is YAMLMapping ->
                 for (entry in value.keyValues) {
-                    val key = entry.key as? YAMLScalar ?: continue
-                    check(project, field.keyPrototypeKind, key, entry.keyText, critical)?.let { problems += it }
+                    (entry.key as? YAMLScalar)?.let { key ->
+                        check(project, field.keyPrototypeKind, key, entry.keyText, critical)
+                            ?.let { problems += it }
+                    }
+                    for (scalar in scalarsOf(entry.value)) {
+                        check(project, field.prototypeKind, scalar, scalar.textValue, critical)
+                            ?.let { problems += it }
+                    }
                 }
-            is YAMLSequence ->
-                for (item in value.items) {
-                    val scalar = item.value as? YAMLScalar ?: continue
-                    check(project, field.prototypeKind, scalar, scalar.textValue, critical)?.let { problems += it }
+            else ->
+                for (scalar in scalarsOf(value)) {
+                    check(project, field.prototypeKind, scalar, scalar.textValue, critical)
+                        ?.let { problems += it }
                 }
-            is YAMLScalar ->
-                check(project, field.prototypeKind, value, value.textValue, critical)?.let { problems += it }
-            else -> {}
         }
         return problems
+    }
+
+    /** The scalars a value is written as: one of it, or one per item of its sequence. */
+    private fun scalarsOf(value: PsiElement?): List<YAMLScalar> = when (value) {
+        is YAMLScalar -> listOf(value)
+        is YAMLSequence -> value.items.mapNotNull { it.value as? YAMLScalar }
+        else -> emptyList()
     }
 
     fun localizationIds(keyValue: YAMLKeyValue): List<ScalarProblem> {
@@ -470,7 +484,13 @@ object RobustValidation {
             return typedField(owner)?.keyPrototypeKind
         }
         val owner = RobustYamlContext.owningKey(scalar) ?: return null
-        return typedField(owner)?.prototypeKind
+        typedField(owner)?.prototypeKind?.let { return it }
+
+        // Inside a dictionary the key over the value is the author's own, so no field answers by that
+        // name; the type of what stands to the right is known one level up. The flag is what keeps
+        // this narrow — under a nested structure the keys are fields and must not inherit a kind.
+        val dictionary = RobustYamlContext.mappingOwner(owner)?.let { typedField(it) } ?: return null
+        return if (dictionary.dictionary) dictionary.prototypeKind else null
     }
 
     fun field(keyValue: YAMLKeyValue): RobustDataField? = typedField(keyValue)

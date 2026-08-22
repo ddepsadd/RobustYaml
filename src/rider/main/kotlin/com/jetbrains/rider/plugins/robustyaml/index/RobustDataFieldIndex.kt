@@ -14,7 +14,13 @@ private class ClassScope(val name: String, val start: Int, val end: Int, val dep
 class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
     override fun getName(): ID<String, String> = NAME
 
-    override fun getVersion(): Int = 8
+    /**
+     * Raise this whenever the shape of what is written changes, a new key included. The data live on
+     * disk and are rebuilt on nothing else: the dictionary key was added while this stayed at 8, the
+     * sandbox read back the index built before it, and the rule found no names at all — silently,
+     * because an empty set of names is what a checkout without dictionaries would look like too.
+     */
+    override fun getVersion(): Int = 9
 
     override fun dependsOnFileContent(): Boolean = true
 
@@ -56,6 +62,22 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
         /** A YAML key some datafield declares as something other than a prototype id. */
         const val PLAIN_FIELD_KEY = "plainField:"
 
+        /**
+         * A YAML key under which the ids are the **values of the mapping**, not the value of the key
+         * itself: `[DataField] public Dictionary<string, EntProtoId> Equipment` writes
+         * `equipment:` and then a slot name per line — `mask: ClothingMaskBreath` — where the key is
+         * content of the author's choosing and the id stands on the right. A rule by the name of the
+         * key cannot see that value at all: the name over it is `mask`, which is a datafield of
+         * nothing, and one of the 110 the ambiguity test rejects anyway. Ctrl+click answered «Cannot
+         * find declaration to go to» there, and rename walked past.
+         *
+         * Only the value side of a dictionary is recorded. `Dictionary<ProtoId<X>, int> Materials`
+         * puts its ids in the keys of the mapping, and a key is not where a reference of ours can
+         * live yet. Neither is this key a replacement for the one above: a name lands in both when
+         * its type says both, and the two answer about different places in the YAML.
+         */
+        const val PROTOTYPE_VALUE_FIELD_KEY = "protoValueField:"
+
         private val MARKERS = listOf("class", "record", "struct")
         private const val REGISTER_MARKER = "RegisterComponent"
         private const val COMPONENT_SUFFIX = "Component"
@@ -94,7 +116,15 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
          * serializers carry the words, the 250 uses of `TimeOffsetSerializer`, `ResPathSerializer`
          * and their like carry none.
          */
-        private val SERIALIZER = Regex("""\b\w*PrototypeId\w*Serializer\s*<([^>]*)>""")
+        private val SERIALIZER = Regex("""\b(\w*PrototypeId\w*Serializer)\s*<([^>]*)>""")
+
+        /**
+         * The one serializer of the seven that checks the values of a dictionary; its twin
+         * `PrototypeIdDictionarySerializer` checks the keys, and the names differ by this word alone.
+         */
+        private const val VALUE_DICTIONARY_SERIALIZER = "PrototypeIdValueDictionarySerializer"
+
+        private val DICTIONARY = Regex("""\b\w*Dictionary\s*<""")
 
         private const val ENTITY_PROTOTYPE = "EntityPrototype"
 
@@ -126,6 +156,7 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
             val fields = mutableMapOf<String, MutableSet<String>>()
             val required = mutableMapOf<String, MutableSet<String>>()
             val prototypeFields = mutableMapOf<String, String>()
+            val prototypeValueFields = mutableMapOf<String, String>()
             val plainFields = mutableSetOf<String>()
             for (attribute in ATTRIBUTE.findAll(text)) {
                 val owner = ownerAt(scopes, classes, attribute.range.first) ?: continue
@@ -139,6 +170,7 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
                 }
                 val prototype = prototypeAt(text, attribute)
                 if (prototype != null) prototypeFields[name] = prototype else plainFields += name
+                dictionaryValueAt(text, attribute)?.let { prototypeValueFields[name] = it }
             }
 
             val included = mutableMapOf<String, MutableSet<String>>()
@@ -180,6 +212,9 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
             for ((name, prototype) in prototypeFields) {
                 result[PROTOTYPE_FIELD_KEY + name] = prototype
             }
+            for ((name, prototype) in prototypeValueFields) {
+                result[PROTOTYPE_VALUE_FIELD_KEY + name] = prototype
+            }
             for (name in plainFields) {
                 result[PLAIN_FIELD_KEY + name] = ""
             }
@@ -196,12 +231,59 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
          */
         private fun prototypeAt(text: CharSequence, attribute: MatchResult): String? {
             SERIALIZER.find(argumentsOf(text, attribute))?.let { serializer ->
-                val last = serializer.groupValues[1].substringAfterLast(',').trim().substringAfterLast('.')
+                val last = lastArgument(serializer)
                 if (last.isNotEmpty()) return last
             }
+            return prototypeIn(FIELD_TYPE.find(text, attribute.range.last)?.groupValues?.get(1) ?: return null)
+        }
+
+        /**
+         * The prototype class whose ids stand in the values of the mapping this datafield writes, or
+         * null when it writes no such mapping. Two forms say it: the serializer that checks values
+         * (`PrototypeIdValueDictionarySerializer<TValue, TPrototype>`, and its twin over keys must
+         * not be mistaken for it), and a dictionary type whose **last** argument carries the id —
+         * `Dictionary<string, EntProtoId>`, `Dictionary<string, List<ProtoId<X>>>` alike, because a
+         * collection is transparent in YAML the same way it is for the plain rule.
+         */
+        private fun dictionaryValueAt(text: CharSequence, attribute: MatchResult): String? {
+            SERIALIZER.find(argumentsOf(text, attribute))?.let { serializer ->
+                val last = lastArgument(serializer)
+                return last.takeIf { it.isNotEmpty() && serializer.groupValues[1] == VALUE_DICTIONARY_SERIALIZER }
+            }
             val type = FIELD_TYPE.find(text, attribute.range.last)?.groupValues?.get(1) ?: return null
+            return prototypeIn(dictionaryValue(type) ?: return null)
+        }
+
+        private fun prototypeIn(type: String): String? {
             PROTO_ID.find(type)?.let { return it.groupValues[1].substringAfterLast('.') }
             return ENTITY_PROTOTYPE.takeIf { ENT_PROTO_ID.containsMatchIn(type) }
+        }
+
+        private fun lastArgument(serializer: MatchResult): String =
+            serializer.groupValues[2].substringAfterLast(',').trim().substringAfterLast('.')
+
+        /**
+         * The value type of a dictionary, read by balancing the angle brackets rather than by a
+         * regex: the arguments nest (`Dictionary<string, List<ProtoId<X>>>`) and a comma inside a
+         * nested one is not the comma that separates key from value.
+         */
+        private fun dictionaryValue(type: String): String? {
+            val open = DICTIONARY.find(type)?.range?.last ?: return null
+            var depth = 0
+            var comma = -1
+            for (index in open until type.length) {
+                when (type[index]) {
+                    '<' -> depth++
+                    '>' -> {
+                        depth--
+                        if (depth == 0) {
+                            return if (comma < 0) null else type.substring(comma + 1, index).trim()
+                        }
+                    }
+                    ',' -> if (depth == 1 && comma < 0) comma = index
+                }
+            }
+            return null
         }
 
         fun findField(text: CharSequence, className: String, field: String): Int? {

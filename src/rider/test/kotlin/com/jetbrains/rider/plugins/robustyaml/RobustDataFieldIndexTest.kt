@@ -15,6 +15,11 @@ class RobustDataFieldIndexTest {
             .filterKeys { it.startsWith(RobustDataFieldIndex.PROTOTYPE_FIELD_KEY) }
             .mapKeys { it.key.removePrefix(RobustDataFieldIndex.PROTOTYPE_FIELD_KEY) }
 
+    private fun valueFields(text: String): Map<String, String> =
+        RobustDataFieldIndex.index(text)
+            .filterKeys { it.startsWith(RobustDataFieldIndex.PROTOTYPE_VALUE_FIELD_KEY) }
+            .mapKeys { it.key.removePrefix(RobustDataFieldIndex.PROTOTYPE_VALUE_FIELD_KEY) }
+
     private fun plainFields(text: String): Set<String> =
         RobustDataFieldIndex.index(text).keys
             .filter { it.startsWith(RobustDataFieldIndex.PLAIN_FIELD_KEY) }
@@ -114,5 +119,77 @@ class RobustDataFieldIndexTest {
 
         assertEquals(mapOf("name" to "EntityPrototype"), prototypeFields(text))
         assertEquals(setOf("name"), plainFields(text))
+    }
+
+    /**
+     * The ids of a dictionary stand in the values of the mapping, one per line under a key the
+     * author invents — `mask: ClothingMaskBreath` under `equipment:`, where `mask` is a datafield of
+     * nothing. Without this key the value is reachable by no rule at all.
+     */
+    @Test
+    fun `a dictionary of ids is written down by its value side`() {
+        val text =
+            """
+            public sealed partial class ChameleonOutfitPrototype
+            {
+                [DataField] public Dictionary<string, EntProtoId> Equipment { get; set; } = new();
+            }
+            """.trimIndent()
+
+        assertEquals(mapOf("equipment" to "EntityPrototype"), valueFields(text))
+    }
+
+    /** A collection is transparent on the value side too: in YAML both are written under one key. */
+    @Test
+    fun `a dictionary of lists of ids names the same prototype`() {
+        val fields = valueFields(
+            """
+            public sealed partial class LoadoutPrototype
+            {
+                [DataField] public Dictionary<string, List<ProtoId<EntityPrototype>>> Items = new();
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(mapOf("items" to "EntityPrototype"), fields)
+    }
+
+    /**
+     * `Dictionary<ProtoId<X>, int>` carries its ids in the keys of the mapping, and a key is not
+     * where a reference of ours can live: taking it for the value side would put a rename over the
+     * amounts written to the right of it.
+     */
+    @Test
+    fun `a dictionary keyed by ids is not a dictionary of ids`() {
+        val text =
+            """
+            public sealed partial class LatheRecipePrototype
+            {
+                [DataField] public Dictionary<ProtoId<MaterialPrototype>, int> Materials = new();
+            }
+            """.trimIndent()
+
+        assertEquals(emptyMap<String, String>(), valueFields(text))
+        assertEquals(mapOf("materials" to "MaterialPrototype"), prototypeFields(text))
+    }
+
+    /** The two dictionary serializers differ by one word, and only one of them checks values. */
+    @Test
+    fun `only the value dictionary serializer names the value side`() {
+        val text =
+            """
+            public sealed partial class ConstructionComponent
+            {
+                [DataField(customTypeSerializer:
+                    typeof(PrototypeIdValueDictionarySerializer<string, EntityPrototype>))]
+                public Dictionary<string, string> Spawns = new();
+
+                [DataField(customTypeSerializer:
+                    typeof(PrototypeIdDictionarySerializer<int, StackPrototype>))]
+                public Dictionary<string, int> Stacks = new();
+            }
+            """.trimIndent()
+
+        assertEquals(mapOf("spawns" to "EntityPrototype"), valueFields(text))
     }
 }

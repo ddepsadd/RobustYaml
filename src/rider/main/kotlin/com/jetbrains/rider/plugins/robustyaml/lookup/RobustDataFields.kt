@@ -10,6 +10,7 @@ import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.indexing.FileBasedIndex
 import com.jetbrains.rider.plugins.robustyaml.RobustYamlContext
 import com.jetbrains.rider.plugins.robustyaml.index.RobustDataFieldIndex
+import org.jetbrains.yaml.psi.YAMLKeyValue
 import java.util.concurrent.ConcurrentHashMap
 
 object RobustDataFields {
@@ -132,9 +133,34 @@ object RobustDataFields {
      */
     fun namesPrototype(project: Project, key: String): Boolean = key in prototypeKeys(project)
 
+    /**
+     * The same question asked of a value rather than of a name, because the name over a value is not
+     * always the one that knows. Under a datafield declared `Dictionary<string, EntProtoId>` the
+     * keys are the author's own — slot names in `equipment:`, one per line — and the id stands to
+     * the right of a key that is a datafield of nothing. So the value is a reference when its own
+     * key says so, or when the mapping it lies in belongs to a key that does.
+     *
+     * One level up, not any: `mask:` under `equipment:` is the shape the content writes, and looking
+     * further would let a name several nestings away claim values it knows nothing about.
+     */
+    fun namesPrototype(keyValue: YAMLKeyValue): Boolean {
+        val project = keyValue.project
+        if (namesPrototype(project, keyValue.keyText)) return true
+        val owner = RobustYamlContext.mappingOwner(keyValue) ?: return false
+        return owner.keyText in prototypeValueKeys(project)
+    }
+
     private fun prototypeKeys(project: Project): Set<String> =
         CachedValuesManager.getManager(project).getCachedValue(project) {
             val named = keysWithPrefix(project, RobustDataFieldIndex.PROTOTYPE_FIELD_KEY)
+            named -= keysWithPrefix(project, RobustDataFieldIndex.PLAIN_FIELD_KEY)
+            CachedValueProvider.Result.create(named, VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS)
+        }
+
+    /** Names whose mapping holds ids in its values, filtered by the same ambiguity test. */
+    private fun prototypeValueKeys(project: Project): Set<String> =
+        CachedValuesManager.getManager(project).getCachedValue(project) {
+            val named = keysWithPrefix(project, RobustDataFieldIndex.PROTOTYPE_VALUE_FIELD_KEY)
             named -= keysWithPrefix(project, RobustDataFieldIndex.PLAIN_FIELD_KEY)
             CachedValueProvider.Result.create(named, VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS)
         }

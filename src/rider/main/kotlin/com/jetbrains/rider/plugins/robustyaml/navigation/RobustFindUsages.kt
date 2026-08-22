@@ -98,7 +98,7 @@ private fun targetOfValue(scalar: YAMLScalar): SearchedTarget? {
     // caret stands on a reference more often than on a declaration, and `result: Crowbar` is one
     // as much as `parent: Crowbar` is.
     if (RobustYamlContext.isPrototypeIdReference(scalar) ||
-        RobustDataFields.namesPrototype(scalar.project, keyValue.keyText)
+        RobustDataFields.namesPrototype(keyValue)
     ) {
         return SearchedTarget(text, localization = false)
     }

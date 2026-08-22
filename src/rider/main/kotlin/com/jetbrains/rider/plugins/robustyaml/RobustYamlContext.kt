@@ -238,6 +238,15 @@ object RobustYamlContext {
             else -> null
         }
 
+    /**
+     * The key whose value is the mapping this key lies in, and null when the mapping is not written
+     * under a key — the declaration itself is an item of the document's sequence, and its own keys
+     * belong to nobody. What it is for: under a datafield declared a dictionary the names of the
+     * keys are the author's, so the only thing that knows what stands there is the key above them.
+     */
+    fun mappingOwner(keyValue: YAMLKeyValue): YAMLKeyValue? =
+        keyValue.parentMapping?.parent as? YAMLKeyValue
+
     fun enclosingSpritePath(scalar: YAMLScalar): String? {
         val keyValue = scalar.parent as? YAMLKeyValue ?: return null
         if (keyValue.value !== scalar || keyValue.keyText != "state") return null
