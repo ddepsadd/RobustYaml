@@ -38,7 +38,7 @@ class RobustYamlModel private constructor(
         
         
         
-        const val serializationHash = 1058776472414428381L
+        const val serializationHash = 7183788757900203818L
         
     }
     override val serializersOwner: ISerializersOwner get() = RobustYamlModel
@@ -94,6 +94,7 @@ data class RobustDataField (
     val name: String,
     val type: String,
     val summary: String?,
+    val defaultValue: String?,
     val prototypeKind: String?,
     val keyPrototypeKind: String?,
     val dictionary: Boolean,
@@ -115,6 +116,7 @@ data class RobustDataField (
             val name = buffer.readString()
             val type = buffer.readString()
             val summary = buffer.readNullable { buffer.readString() }
+            val defaultValue = buffer.readNullable { buffer.readString() }
             val prototypeKind = buffer.readNullable { buffer.readString() }
             val keyPrototypeKind = buffer.readNullable { buffer.readString() }
             val dictionary = buffer.readBool()
@@ -124,13 +126,14 @@ data class RobustDataField (
             val polymorphic = buffer.readBool()
             val values = buffer.readList { buffer.readString() }
             val keyValues = buffer.readList { buffer.readString() }
-            return RobustDataField(name, type, summary, prototypeKind, keyPrototypeKind, dictionary, sequence, customSerializer, localized, polymorphic, values, keyValues)
+            return RobustDataField(name, type, summary, defaultValue, prototypeKind, keyPrototypeKind, dictionary, sequence, customSerializer, localized, polymorphic, values, keyValues)
         }
         
         override fun write(ctx: SerializationCtx, buffer: AbstractBuffer, value: RobustDataField)  {
             buffer.writeString(value.name)
             buffer.writeString(value.type)
             buffer.writeNullable(value.summary) { buffer.writeString(it) }
+            buffer.writeNullable(value.defaultValue) { buffer.writeString(it) }
             buffer.writeNullable(value.prototypeKind) { buffer.writeString(it) }
             buffer.writeNullable(value.keyPrototypeKind) { buffer.writeString(it) }
             buffer.writeBool(value.dictionary)
@@ -158,6 +161,7 @@ data class RobustDataField (
         if (name != other.name) return false
         if (type != other.type) return false
         if (summary != other.summary) return false
+        if (defaultValue != other.defaultValue) return false
         if (prototypeKind != other.prototypeKind) return false
         if (keyPrototypeKind != other.keyPrototypeKind) return false
         if (dictionary != other.dictionary) return false
@@ -176,6 +180,7 @@ data class RobustDataField (
         __r = __r*31 + name.hashCode()
         __r = __r*31 + type.hashCode()
         __r = __r*31 + if (summary != null) summary.hashCode() else 0
+        __r = __r*31 + if (defaultValue != null) defaultValue.hashCode() else 0
         __r = __r*31 + if (prototypeKind != null) prototypeKind.hashCode() else 0
         __r = __r*31 + if (keyPrototypeKind != null) keyPrototypeKind.hashCode() else 0
         __r = __r*31 + dictionary.hashCode()
@@ -194,6 +199,7 @@ data class RobustDataField (
             print("name = "); name.print(printer); println()
             print("type = "); type.print(printer); println()
             print("summary = "); summary.print(printer); println()
+            print("defaultValue = "); defaultValue.print(printer); println()
             print("prototypeKind = "); prototypeKind.print(printer); println()
             print("keyPrototypeKind = "); keyPrototypeKind.print(printer); println()
             print("dictionary = "); dictionary.print(printer); println()
@@ -213,7 +219,7 @@ data class RobustDataField (
 
 
 /**
- * #### Generated from [RobustYamlModel.kt:28]
+ * #### Generated from [RobustYamlModel.kt:29]
  */
 data class RobustFieldQuery (
     val className: String,
@@ -278,7 +284,7 @@ data class RobustFieldQuery (
 
 
 /**
- * #### Generated from [RobustYamlModel.kt:33]
+ * #### Generated from [RobustYamlModel.kt:34]
  */
 data class RobustFieldsReply (
     val resolved: Boolean,
@@ -343,7 +349,7 @@ data class RobustFieldsReply (
 
 
 /**
- * #### Generated from [RobustYamlModel.kt:38]
+ * #### Generated from [RobustYamlModel.kt:39]
  */
 data class RobustImplementationsReply (
     val resolved: Boolean,

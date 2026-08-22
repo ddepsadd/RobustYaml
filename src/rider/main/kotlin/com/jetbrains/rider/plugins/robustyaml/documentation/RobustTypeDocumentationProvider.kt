@@ -141,9 +141,15 @@ private class FieldDocumentationTarget(
                 }
 
                 val kind = declared?.prototypeKind
+                val default = declared?.defaultValue
                 val values = declared?.values.orEmpty() + declared?.keyValues.orEmpty()
-                if (kind != null || owner != null || values.isNotEmpty()) {
+                if (kind != null || owner != null || values.isNotEmpty() || default != null) {
                     append(DocumentationMarkup.SECTIONS_START)
+                    // First of the sections, because it answers the question a key without a value
+                    // raises: leaving it out is a choice, and this is what the choice means.
+                    if (default != null) {
+                        section("Default", DefaultLanguageHighlighterColors.CONSTANT, default)
+                    }
                     if (kind != null) {
                         section("Prototype", RobustYamlColors.PROTOTYPE_KIND, kind)
                     }

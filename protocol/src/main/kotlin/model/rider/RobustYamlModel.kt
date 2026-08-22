@@ -14,6 +14,7 @@ object RobustYamlModel : Ext(SolutionModel.Solution) {
         field("name", PredefinedType.string)
         field("type", PredefinedType.string)
         field("summary", PredefinedType.string.nullable)
+        field("defaultValue", PredefinedType.string.nullable)
         field("prototypeKind", PredefinedType.string.nullable)
         field("keyPrototypeKind", PredefinedType.string.nullable)
         field("dictionary", PredefinedType.bool)

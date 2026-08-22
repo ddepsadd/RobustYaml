@@ -149,6 +149,7 @@ namespace ReSharperPlugin.RobustYaml
                         field.Name,
                         presentable,
                         Summary(field.Member),
+                        DefaultValue(field.Member),
                         field.PrototypeKind,
                         field.KeyPrototypeKind,
                         IsDictionary(field.Type, type.Module),
@@ -285,6 +286,86 @@ namespace ReSharperPlugin.RobustYaml
             var xml = node?.InnerXml;
             return string.IsNullOrWhiteSpace(xml) ? null : xml;
         }
+
+        /// <summary>
+        /// What the field is worth when the prototype says nothing about it. The initializer is
+        /// syntax, not a constant: computing it would need a concrete module, and the same assert
+        /// that forbids reading an attribute argument as a constant applies here.
+        ///
+        /// Two forms are dropped rather than shown. <c>default!</c> and <c>default(T)</c> say only
+        /// that the author had nothing to put there — 763 datafields of ss14-wega are written that
+        /// way — and a parameterless <c>new()</c> says only "empty", which the type already said
+        /// (683 more). An object creation carrying arguments or an initializer body stays: the
+        /// 491 remaining ones are `new SoundPathSpecifier("/Audio/…")` and the like, where the value
+        /// is the answer. The rest — 1812 numbers, 1028 strings, 824 booleans, 751 `Color.Orange`
+        /// and its kin — is exactly what the hover is asked for.
+        /// </summary>
+        private static string DefaultValue(ITypeMember member)
+        {
+            foreach (var declaration in member.GetDeclarations())
+            {
+                IVariableInitializer initial = null;
+                if (declaration is IFieldDeclaration field)
+                    initial = field.Initial;
+                else if (declaration is IPropertyDeclaration property)
+                    initial = property.Initial;
+
+                var value = (initial as IExpressionInitializer)?.Value;
+                while (value is ISuppressNullableWarningExpression suppressed)
+                    value = suppressed.Operand as ICSharpExpression;
+
+                if (value == null || !Informative(value))
+                    continue;
+
+                var text = Collapse(value.GetText());
+                if (!string.IsNullOrEmpty(text))
+                    return text;
+            }
+
+            return null;
+        }
+
+        private static bool Informative(ICSharpExpression value)
+        {
+            if (value is IDefaultExpression)
+                return false;
+            if (value is IObjectCreationExpression creation)
+                return creation.Arguments.Count > 0 || creation.Initializer != null;
+            return true;
+        }
+
+        /// <summary>
+        /// One line out of what may be several: an initializer body is written across lines, and the
+        /// hover has a single row for it. Long ones are cut rather than wrapped — the point of the
+        /// row is the value, and what does not fit is read in the source.
+        /// </summary>
+        private static string Collapse(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            var builder = new System.Text.StringBuilder(text.Length);
+            var space = false;
+            foreach (var symbol in text)
+            {
+                if (char.IsWhiteSpace(symbol))
+                {
+                    space = builder.Length > 0;
+                    continue;
+                }
+
+                if (space)
+                    builder.Append(' ');
+                space = false;
+                builder.Append(symbol);
+            }
+
+            return builder.Length > DefaultLimit
+                ? builder.ToString(0, DefaultLimit) + "…"
+                : builder.ToString();
+        }
+
+        private const int DefaultLimit = 80;
 
         private IModuleReferenceResolveContext ResolveContext(IPsiModule module)
         {

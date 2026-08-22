@@ -442,6 +442,21 @@ true, true)` ассерт не снимает. Имя берётся из син
 `IAttributesOwnerDeclaration.Attributes` → `Arguments[0].Value as ICSharpLiteralExpression` →
 `Literal.GetText().Trim('"')`. Резолв не нужен вовсе.
 
+**Значение по умолчанию — тоже синтаксис, и по той же причине.** Инициализатор читается
+`member.GetDeclarations()` → `IFieldDeclaration.Initial` либо `IPropertyDeclaration.Initial`
+(общего интерфейса с `Initial` нет: `IInitializerOwnerDeclaration` отдаёт `ITreeNode Initializer`,
+про который неизвестно, тот ли это узел) → `IExpressionInitializer.Value.GetText()`. Вычислять
+константу нельзя ровно так же, как у аргумента атрибута, — нужен конкретный модуль.
+
+Показывается не всё. `default!` приезжает завёрнутым в `ISuppressNullableWarningExpression`
+(`.Operand` снимает обёртку), а `default` и `default(T)` — это `IDefaultExpression`; и то и другое
+означает «автор ничего не положил», таких датафилдов в ss14-wega 763. Бесскобочный `new()` значит
+«пусто», что уже сказано типом, — ещё 683. Зато `IObjectCreationExpression` с аргументами или
+с телом инициализатора остаётся: это 491 объявление вида `new SoundPathSpecifier("/Audio/…")`,
+где значение и есть ответ. Остальное — 1812 чисел, 1028 строк, 824 булевых и 751 `Color.Orange` —
+как раз то, ради чего ховер открывают. Отбор сделан по типам узлов, а не по тексту: `default!`
+и `new()` строками ловятся, но `new (0)` с пробелом или `default (int)` — уже нет.
+
 **Имя атрибута в синтаксисе — без суффикса `Attribute`.** `GetAttributeShortName()` из метаданных
 даёт `DataFieldAttribute`, а `IAttribute.Name.ShortName` для `[DataField("spawned")]` — `DataField`.
 Из-за несовпадения бэкенд молча возвращал 0 полей. Сравнение идёт по имени со снятым суффиксом.
@@ -2172,8 +2187,20 @@ regex-индекс эквивалентен чтению `[RegisterComponent]` �
       `equipment:`), поэтому ссылка ищется по имени ключа **над** маппингом; 24 имени, 4072 значения
       получили Ctrl+клик, Find Usages и rename, чужих значений под ними ноль; проверка и автокомплит
       там же, но от бэкенда — вид значения словаря он присылал с самого начала, читать его забыли
-- [ ] Значения по умолчанию датафилда в ховере: `IFieldDeclaration.Initial` →
-      `IExpressionInitializer.Value.GetText()`, есть у 6739 полей из 10442
+- [x] Значения по умолчанию датафилда в ховере: инициализатор из синтаксиса, секция `Default`
+      первой; `default!` (763) и голый `new()` (683) отброшены по типу узла, `new X(args)` (491)
+      оставлен
+- [ ] Переходы из `.cs` в контент: сейчас с литерала работает только ключ локализации, а рядом
+      лежат две группы того же вида. Пути ресурсов — 1010 литералов (`Textures` 456, `Audio` 407,
+      `Fonts` 67, `Maps` 30, `EngineFonts` 16, `Prototypes` 16, `Shaders` 12, `Locale` 5,
+      `ServerInfo` 1): опознаются ведущим `/` плюс существованием файла, ложных по построению нет.
+      Id прототипов — 1150 литералов (789 разных) на строках, где написан `EntProtoId` или
+      `ProtoId<X>`: тип рядом и есть условие, потому что литерал сам по себе от `"Sprite"`
+      неотличим, а у `ProtoId<X>` из параметра известен ещё и вид. Сканер литералов уже есть
+      (`RobustLocaleUsageIndex.stringRanges`, посимвольный автомат со всеми формами строк C#),
+      то есть работа — это классификация найденного и цели перехода. Действие ровно одно:
+      Ctrl+клик через `gotoDeclarationHandler`, Alt+F7 и Shift+F6 из C# невозможны (см. запись
+      про `BackendDelegatingAction`)
 - [ ] `RobustYamlContext` тянет вверх: общий словарь PSI импортирует `inspection.RobustValidation`
       и `lookup.RobustLocalization` ради `isLocalizationValue` и типизированной ветки. Компилируется,
       но зависимость не в ту сторону — первый кандидат, если чистить раскладку дальше
