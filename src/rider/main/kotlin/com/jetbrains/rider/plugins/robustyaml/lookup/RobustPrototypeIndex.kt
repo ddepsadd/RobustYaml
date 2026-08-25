@@ -100,12 +100,36 @@ object RobustPrototypeIndex {
         return ids.toList()
     }
 
-    fun findDeclarations(project: Project, id: String): List<YAMLKeyValue> {
+    /**
+     * The kind a prototype class declares, which is [RobustDataFields.prototypeClass] read backwards.
+     * There is no index of that direction and no need for one: the kinds are 205 in ss14-wega, each
+     * answered from an index already built, and the map is cached beside them.
+     *
+     * What asks is a reference written in C#: `ProtoId<ShaderPrototype>` names the class, while
+     * everything the plugin knows about ids is keyed by kind.
+     */
+    fun kindOfClass(project: Project, className: String): String? =
+        if (className.isEmpty()) null else kindsByClass(project)[className]
+
+    private fun kindsByClass(project: Project): Map<String, String> =
+        CachedValuesManager.getManager(project).getCachedValue(project) {
+            val byClass = mutableMapOf<String, String>()
+            for (kind in kinds(project)) {
+                val className = RobustDataFields.prototypeClass(project, kind) ?: continue
+                byClass.putIfAbsent(className, kind)
+            }
+            CachedValueProvider.Result.create(
+                byClass.toMap(),
+                VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS,
+            )
+        }
+
+    fun findDeclarations(project: Project, id: String, kind: String? = null): List<YAMLKeyValue> {
         if (id.isEmpty()) return emptyList()
 
         val declarations = mutableListOf<YAMLKeyValue>()
         val psiManager = PsiManager.getInstance(project)
-        for (site in sites(project, id)) {
+        for (site in sites(project, id).filter { kind == null || it.kind == kind }) {
             val element = psiManager.findFile(site.file)?.findElementAt(site.offset)
             PsiTreeUtil.getParentOfType(element, YAMLKeyValue::class.java, false)
                 ?.let { declarations += it }

@@ -18,10 +18,12 @@ import com.intellij.psi.xml.XmlAttributeValue
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.Processor
 import com.jetbrains.rider.plugins.robustyaml.RobustYamlContext
+import com.jetbrains.rider.plugins.robustyaml.index.RobustCodeLinks
 import com.jetbrains.rider.plugins.robustyaml.index.RobustYamlValueIndex
 import com.jetbrains.rider.plugins.robustyaml.lookup.RobustDataFields
 import com.jetbrains.rider.plugins.robustyaml.lookup.RobustGuidebook
 import com.jetbrains.rider.plugins.robustyaml.lookup.RobustLocalization
+import com.jetbrains.rider.plugins.robustyaml.lookup.processCodeIdUsages
 import com.jetbrains.rider.plugins.robustyaml.lookup.processLocaleTextUsages
 import com.jetbrains.rider.plugins.robustyaml.reference.LocalizationIdReference
 import com.jetbrains.rider.plugins.robustyaml.reference.PrototypeIdReference
@@ -116,6 +118,14 @@ private fun targetOfValue(scalar: YAMLScalar): SearchedTarget? {
 private const val ID_KEY = "id"
 private const val TYPE_KEY = "type"
 
+/**
+ * A candidate the YAML walk has no business opening. The value index keys the ids of `.cs` files
+ * too, and those are read by their own walk — asking the PSI of a C# file for `YAMLScalar` children
+ * would answer nothing after building a tree for every candidate.
+ */
+private fun isCode(file: VirtualFile): Boolean =
+    file.extension.equals(RobustCodeLinks.EXTENSION, ignoreCase = true)
+
 /** How many candidate file names the debug log spells out before cutting the list short. */
 private const val LOGGED_CANDIDATES = 20
 
@@ -136,8 +146,12 @@ internal fun processReferences(
 
     // A localization key is named from C# as often as from a prototype — 5657 of the 56269 messages
     // of ss14-wega against 10875 — and those files have no PSI on the frontend to search through.
-    if (!target.localization) return true
-    return processLocaleTextUsages(project, target.name, consumer)
+    if (target.localization) return processLocaleTextUsages(project, target.name, consumer)
+
+    // An id is named from C# too, by the 1123 literals declared `EntProtoId` or `ProtoId<X>`. The
+    // same walk answers both callers, so a rename that misses them cannot happen while the search
+    // finds them: what Alt+F7 lists is what Shift+F6 rewrites.
+    return processCodeIdUsages(project, target.name, consumer)
 }
 
 private fun processYamlReferences(
@@ -146,7 +160,7 @@ private fun processYamlReferences(
     consumer: (PsiReference) -> Boolean,
 ): Boolean {
     val files = ReadAction.compute<Collection<VirtualFile>, RuntimeException> {
-        RobustYamlValueIndex.files(project, target.name)
+        RobustYamlValueIndex.files(project, target.name).filterNot(::isCode)
     }
     // The names, not just the count: an absent candidate is invisible otherwise, and that is the
     // shape every divergence between the text rule of an index and the PSI rule beside it takes —
@@ -215,7 +229,7 @@ private fun processAliasUsages(
     consumer: (YAMLAlias) -> Boolean,
 ): Boolean {
     val files = ReadAction.compute<Collection<VirtualFile>, RuntimeException> {
-        RobustYamlValueIndex.files(project, target.name)
+        RobustYamlValueIndex.files(project, target.name).filterNot(::isCode)
     }
 
     val manager = PsiManager.getInstance(project)

@@ -62,6 +62,8 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustLocaleNameValidator" />
     <gotoDeclarationHandler
         implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustLocaleDeclarationHandler" />
+    <gotoDeclarationHandler
+        implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustCodeDeclarationHandler" />
     <usageTargetProvider
         implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustLocaleUsageTargetProvider" />
     <nonProjectFileWritingAccessExtension

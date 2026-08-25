@@ -22,7 +22,7 @@ import com.jetbrains.rider.plugins.robustyaml.lookup.RobustGuidebook
 class RobustYamlValueIndex : ScalarIndexExtension<String>() {
     override fun getName(): ID<String, Void> = NAME
 
-    override fun getVersion(): Int = 5
+    override fun getVersion(): Int = 6
 
     override fun dependsOnFileContent(): Boolean = true
 
@@ -31,7 +31,8 @@ class RobustYamlValueIndex : ScalarIndexExtension<String>() {
     override fun getInputFilter(): FileBasedIndex.InputFilter =
         FileBasedIndex.InputFilter { file ->
             file.extension.equals(YAML_EXTENSION, ignoreCase = true) ||
-                file.extension.equals(RobustGuidebook.EXTENSION, ignoreCase = true)
+                file.extension.equals(RobustGuidebook.EXTENSION, ignoreCase = true) ||
+                file.extension.equals(RobustCodeLinks.EXTENSION, ignoreCase = true)
         }
 
     override fun getIndexer(): DataIndexer<String, Void?, FileContent> =
@@ -65,13 +66,21 @@ class RobustYamlValueIndex : ScalarIndexExtension<String>() {
         /**
          * A guidebook document names prototypes too — `<GuideEntityEmbed Entity="Crowbar"/>` — and
          * without them the whole guide is invisible to Find Usages and to a rename.
+         *
+         * So does C#, where an id is a string literal declared `EntProtoId` or `ProtoId<X>`: 1123 of
+         * them in ss14-wega. Only the ids of a `.cs` file are keyed, not the paths beside them —
+         * a path is never the target of a search that starts in YAML, and an unused key costs the
+         * index its size.
          */
-        fun values(text: CharSequence, extension: String): Map<String, Void?> =
-            if (extension.equals(RobustGuidebook.EXTENSION, ignoreCase = true)) {
+        fun values(text: CharSequence, extension: String): Map<String, Void?> = when {
+            extension.equals(RobustGuidebook.EXTENSION, ignoreCase = true) ->
                 RobustGuidebook.ids(text).associateWith { null }
-            } else {
-                values(text)
-            }
+
+            extension.equals(RobustCodeLinks.EXTENSION, ignoreCase = true) ->
+                RobustCodeLinks.ids(text).associate { it.value to null }
+
+            else -> values(text)
+        }
 
         fun values(text: CharSequence): Map<String, Void?> {
             val keys = mutableMapOf<String, Void?>()

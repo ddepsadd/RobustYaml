@@ -13,6 +13,7 @@ import com.intellij.refactoring.listeners.RefactoringElementListener
 import com.intellij.refactoring.rename.RenamePsiElementProcessor
 import com.intellij.usageView.UsageInfo
 import com.jetbrains.rider.plugins.robustyaml.RobustYamlContext
+import com.jetbrains.rider.plugins.robustyaml.lookup.PrototypeIdCodeReference
 import com.jetbrains.rider.plugins.robustyaml.lookup.RobustPrototypeIndex
 import com.jetbrains.rider.plugins.robustyaml.reference.PrototypeIdReference
 import org.jetbrains.yaml.psi.YAMLKeyValue
@@ -97,7 +98,10 @@ class RobustRenameProcessor : RenamePsiElementProcessor() {
         val touched = mutableListOf<VirtualFile>()
         for (usage in usages) {
             val reference = usage.reference ?: continue
-            if (reference !is PrototypeIdReference) continue
+            // The second kind is a string literal of C#, which carries no PSI of its own and writes
+            // through the document. Leaving it out would rewrite the content and leave the code
+            // naming an id nobody declares — and the code would still compile.
+            if (reference !is PrototypeIdReference && reference !is PrototypeIdCodeReference) continue
 
             reference.element.containingFile?.virtualFile?.let { touched += it }
             reference.handleElementRename(newName)

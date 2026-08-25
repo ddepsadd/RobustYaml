@@ -212,7 +212,7 @@ class RobustLocaleUsageIndex : ScalarIndexExtension<String>() {
          * without it the three quotes of `"""` read as an empty literal followed by an opening one,
          * and the rest of the file is scanned as if it were a string — 57 files of ss14-wega.
          */
-        private fun stringRanges(text: CharSequence): List<Pair<Int, Int>> {
+        fun stringRanges(text: CharSequence): List<Pair<Int, Int>> {
             val ranges = mutableListOf<Pair<Int, Int>>()
             // The interpolated strings whose holes the scan is currently inside, with the brace depth
             // reached in each: a hole is code, and the code in it may open another such string.
