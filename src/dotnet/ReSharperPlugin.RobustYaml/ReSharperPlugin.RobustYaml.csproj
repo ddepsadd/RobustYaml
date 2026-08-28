@@ -2,7 +2,14 @@
 
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
-    <IsPackable>True</IsPackable>
+    <!--
+      Not packed: this build of the backend is empty. RobustYamlHost is under `#if RIDER` in its
+      entirety, so what would ship to Visual Studio is a zone marker and the generated rd model —
+      a plugin that installs and does nothing. The project is still built on purpose: it is the
+      guard on the `#if RIDER` boundary. Anything Rider-only written outside the directive fails
+      to compile right here, where the Rider SDK is not referenced.
+    -->
+    <IsPackable>False</IsPackable>
     <DefineConstants>$(DefineConstants);RESHARPER</DefineConstants>
     <IncludeBuildOutput>false</IncludeBuildOutput>
   </PropertyGroup>

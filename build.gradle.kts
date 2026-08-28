@@ -30,6 +30,29 @@ val DotnetPluginId = providers.gradleProperty("DotnetPluginId").get()
 val RiderPluginId = providers.gradleProperty("RiderPluginId").get()
 val PublishToken = providers.gradleProperty("PublishToken").get()
 
+// The two halves of the plugin take their platform version from different files — the frontend from
+// ProductVersion above, the backend from SdkVersion in `src/dotnet/Plugin.props` — and until now a
+// comment was all that held them together. Drift hides itself in the worst possible way: WaveVersion
+// is cut out of SdkVersion by string surgery in Directory.Build.props, so a backend left on the
+// previous SDK declares the previous wave, the host will not load it, and every hover, completion
+// and typed check that needs a C# type simply goes quiet — which is exactly how this plugin looks
+// while the backend is merely warming up. Only the leading branch is compared: the SDK carries a
+// package revision of its own (2026.2.0.1), and ProductVersion may carry an EAP suffix.
+val SdkVersion = Regex("<SdkVersion>([^<]+)</SdkVersion>")
+    .find(file("src/dotnet/Plugin.props").readText())
+    ?.groupValues?.get(1)
+    ?: throw GradleException("No <SdkVersion> in src/dotnet/Plugin.props")
+
+fun branchOf(version: String): String? = Regex("""^\d+\.\d+""").find(version)?.value
+
+if (branchOf(ProductVersion) == null || branchOf(ProductVersion) != branchOf(SdkVersion)) {
+    throw GradleException(
+        "Platform versions disagree: ProductVersion=$ProductVersion (gradle.properties) against " +
+            "SdkVersion=$SdkVersion (src/dotnet/Plugin.props). Raise both, or the backend is built " +
+            "against an SDK the host will not load.",
+    )
+}
+
 allprojects {
     repositories {
         maven { setUrl("https://cache-redirector.jetbrains.com/maven-central") }
@@ -143,7 +166,7 @@ val pushNuGet = tasks.register<Exec>("pushNuGet") {
 }
 
 tasks.buildPlugin {
-    finalizedBy(copyPluginZip, packDotNet)
+    finalizedBy(copyPluginZip)
 }
 
 dependencies {
@@ -197,11 +220,15 @@ tasks.prepareSandbox {
     }
 }
 
+// `pushNuGet` is deliberately not wired in: what it would upload is the ReSharper build of the
+// backend, and that one is empty — the whole host is under `#if RIDER`, so a Visual Studio user
+// would install a plugin that does nothing. On top of that the push runs *after* the zip is already
+// published, so a failure there leaves a half-shipped release. The task stays registered: the day
+// there are real ReSharper-side features, this is one line again.
 tasks.publishPlugin {
     dependsOn(testDotNet)
     dependsOn(tasks.buildPlugin)
     token.set(PublishToken)
-    finalizedBy(pushNuGet)
 }
 
 val riderModel = configurations.consumable("riderModel")
