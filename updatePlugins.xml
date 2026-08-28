@@ -1,0 +1,38 @@
+<plugins>
+  <plugin id="com.jetbrains.rider.plugins.robustyaml" url="https://github.com/ddepsadd/RobustYaml/releases/download/1.0.0/ReSharperPlugin.RobustYaml-1.0.0.zip" version="1.0.0">
+    <name>RobustYaml</name>
+    <vendor>Depsad</vendor>
+    <idea-version since-build="262" until-build="262.*"/>
+    <description><![CDATA[<p><b>RobustYaml</b> teaches Rider the YAML prototypes of Robust Toolbox — the format the content
+of Space Station 14 is written in. It reads the C# of the engine and of the content, so what it
+knows about a key is what the game will do with that key.</p>
+
+<ul>
+  <li><b>Completion and validation</b> for component names, prototype kinds, datafields, enum
+  members, flags, colours, vectors, sprite states and prototype ids. Every value is judged by the
+  rule the engine uses to read it, down to the difference between <code>float</code> and
+  <code>TimeSpan</code>.</li>
+
+  <li><b>Navigation</b>: Ctrl+click from <code>parent:</code> to the declaration, from
+  <code>type: Sprite</code> to <code>SpriteComponent.cs</code>, from a resource path to the file,
+  and from a C# string literal straight into the content. Find Usages and Rename cover prototype
+  ids and localization keys across YAML, <code>.ftl</code>, <code>.cs</code>, XAML and the
+  guidebook — in one refactoring, not file by file.</li>
+
+  <li><b>What the player will see</b>: the sprite in the gutter and in the hover, the entity name
+  and the text of a localization message as inline hints, the localized name, description and
+  suffix of a prototype in the popup.</li>
+
+  <li><b>Editing</b>: sequence indentation the way SS14 writes it, live templates, folding,
+  Structure View, Ctrl+H over the inheritance chain, a colour picker for Robust hex.</li>
+</ul>
+
+<p>Prototypes and <code>Resources</code> normally lie outside the solution — the plugin indexes
+them anyway, so everything works on a checkout opened the usual way.</p>
+
+<p>The checks come from the engine's own serializers and are measured against a full content
+checkout: 30 000 prototypes and 56 000 localization messages, with the false positives driven to
+zero before a check ships.</p>]]></description>
+    <change-notes><![CDATA[- First release of the plugin. Is everything new (&gt;w,&lt;)?]]></change-notes>
+  </plugin>
+</plugins>
