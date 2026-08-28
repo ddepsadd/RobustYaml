@@ -152,6 +152,12 @@ dependencies {
         jetbrainsRuntime()
         bundledPlugin("org.jetbrains.plugins.yaml")
         bundledModule("intellij.rider.rdclient.dotnet")
+        // The PSI of C#: `CSharpStringLiteralExpression` is what a reference inside a string
+        // literal hangs on, and Rider hangs its own on the same class.
+        bundledModule("intellij.rider.languages")
+        // `PsiTreeElementBase`, the base of a structure view node, lives in a module of its own
+        // rather than in the platform jars.
+        bundledModule("intellij.platform.structureView")
         testFramework(TestFrameworkType.Platform)
     }
     testImplementation("junit:junit:4.13.2")

@@ -29,7 +29,7 @@ class RobustSpriteDocumentationProvider : DocumentationTargetProvider {
     }
 }
 
-private class RsiContentsTarget(private val rsi: VirtualFile) : DocumentationTarget {
+internal class RsiContentsTarget(private val rsi: VirtualFile) : DocumentationTarget {
     override fun createPointer(): Pointer<out DocumentationTarget> = Pointer.hardPointer(this)
 
     override fun computePresentation(): TargetPresentation =
@@ -150,7 +150,7 @@ private class RsiContentsTarget(private val rsi: VirtualFile) : DocumentationTar
     }
 }
 
-private class SpritePreviewTarget(private val png: VirtualFile) : DocumentationTarget {
+internal class SpritePreviewTarget(private val png: VirtualFile) : DocumentationTarget {
     override fun createPointer(): Pointer<out DocumentationTarget> = Pointer.hardPointer(this)
 
     override fun computePresentation(): TargetPresentation =

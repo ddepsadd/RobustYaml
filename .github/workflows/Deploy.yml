@@ -5,18 +5,119 @@ on:
     tags:
       - '*.*.*'
 
+# The Release job writes: a GitHub release with the zip, and the branch that carries
+# updatePlugins.xml for the custom plugin repository.
+permissions:
+  contents: write
+
 jobs:
   Publish:
     runs-on: windows-latest
+    env:
+      PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - run: ./gradlew :publishPlugin -PBuildConfiguration="Release" -PPluginVersion="${{ github.ref_name }}" -PPublishToken="${{ env.PUBLISH_TOKEN }}"
-        env:
-          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+      # A release goes out only over green tests. Publishing is irreversible for a version
+      # number, so the suites run here as well and not only on push: a tag can point at a
+      # commit that CI never saw.
+      - run: ./gradlew :test :testDotNet --no-daemon -PBuildConfiguration="Release"
+      - run: ./gradlew :buildPlugin --no-daemon -PBuildConfiguration="Release" -PPluginVersion="${{ github.ref_name }}"
+      # The Marketplace is optional: without a token the step is skipped rather than failing,
+      # because the custom repository below is a complete way to ship on its own.
+      - name: Publish to JetBrains Marketplace
+        if: env.PUBLISH_TOKEN != ''
+        run: ./gradlew :publishPlugin --no-daemon -PBuildConfiguration="Release" -PPluginVersion="${{ github.ref_name }}" -PPublishToken="${{ env.PUBLISH_TOKEN }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ${{ github.event.repository.name }}.${{ github.ref_name }}
           path: output
+
+  Release:
+    needs: Publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}.${{ github.ref_name }}
+          path: output
+
+      # Release notes are the same text the IDE shows in the update dialog: both come from the
+      # first block of CHANGELOG.md, so the two can never say different things.
+      - name: Take the release notes from the changelog
+        run: |
+          python3 - <<'PY' > notes.md
+          import re
+          text = open('CHANGELOG.md', encoding='utf-8').read()
+          block = re.search(r'(?s)^##\s.*?\n(.*?)(?=\n##\s|\Z)', text, re.M)
+          print((block.group(1) if block else '').strip())
+          PY
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" output/*.zip --title "${{ github.ref_name }}" --notes-file notes.md
+
+      # updatePlugins.xml is built from the plugin.xml that actually shipped, not from the sources:
+      # the version and since-build there are the patched ones, and a repository that promises
+      # something the zip does not carry is worse than no repository at all.
+      - name: Describe the build for the custom repository
+        run: |
+          python3 - <<'PY'
+          import glob, os, re, zipfile
+          from xml.etree import ElementTree
+
+          zip_path = glob.glob('output/*.zip')[0]
+          with zipfile.ZipFile(zip_path) as zf:
+              name = next(n for n in zf.namelist() if n.endswith('META-INF/plugin.xml'))
+              plugin = ElementTree.fromstring(zf.read(name))
+
+          def text(tag, default=''):
+              node = plugin.find(tag)
+              return (node.text or default).strip() if node is not None else default
+
+          since = plugin.find('idea-version').get('since-build', '')
+          # The upper bound is the same major branch. This plugin stands on internals checked
+          # against one Rider build (bundled modules, behaviour read off the bytecode), so the
+          # next major has to be built and tried, never merely allowed.
+          until = plugin.find('idea-version').get('until-build') or f"{since.split('.')[0]}.*"
+
+          url = (f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/"
+                 f"{os.environ['GITHUB_REF_NAME']}/{os.path.basename(zip_path)}")
+
+          entry = f"""<plugins>
+            <plugin id="{text('id')}" url="{url}" version="{text('version')}">
+              <name>{text('name')}</name>
+              <vendor>{text('vendor')}</vendor>
+              <idea-version since-build="{since}" until-build="{until}"/>
+              <description><![CDATA[{text('description')}]]></description>
+              <change-notes><![CDATA[{text('change-notes')}]]></change-notes>
+            </plugin>
+          </plugins>
+          """
+          open('updatePlugins.xml', 'w', encoding='utf-8').write(entry)
+          print(entry)
+          PY
+
+      # A branch of its own, cloned aside: the checkout here holds the sources and the artifacts,
+      # and switching it to an orphan branch in place would take both along.
+      - name: Publish updatePlugins.xml
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}"
+          git clone --depth 1 --branch gh-pages "$remote" pages 2>/dev/null || {
+            mkdir pages && cd pages && git init -q && git checkout -qb gh-pages \
+              && git remote add origin "$remote" && cd ..
+          }
+          cp updatePlugins.xml pages/
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updatePlugins.xml
+          # `[skip ci]` keeps this push from starting the CI workflow, which runs on every branch.
+          git commit -qm "updatePlugins.xml for ${GITHUB_REF_NAME} [skip ci]" || exit 0
+          git push -q origin gh-pages

@@ -1,0 +1,50 @@
+<templateSet group="RobustYaml">
+  <!--
+    The skeletons of the three declarations that get written by hand. Every variable is completed
+    rather than guessed: `complete()` opens the lookup this plugin fills, so `parent` offers ids of
+    the right kind and `type` the components of the checkout.
+
+    The leading dash is `$DASH$` rather than a literal, because the line is not always empty: Enter
+    under `components:` leaves `- ` behind, and a literal dash turned that into `- - type:`. The
+    macro writes one only where there is not one already.
+  -->
+  <template name="ent"
+            value="$DASH$type: entity&#10;  id: $ID$&#10;  parent: $PARENT$&#10;  name: $NAME$&#10;  components:&#10;  - type: $COMPONENT$&#10;$END$"
+            description="Entity prototype"
+            toReformat="false"
+            toShortenFQNames="false">
+    <variable name="DASH" expression="robustSequenceDash()" defaultValue="" alwaysStopAt="false" />
+    <variable name="ID" expression="" defaultValue="" alwaysStopAt="true" />
+    <variable name="PARENT" expression="complete()" defaultValue="" alwaysStopAt="true" />
+    <variable name="NAME" expression="" defaultValue="" alwaysStopAt="true" />
+    <variable name="COMPONENT" expression="complete()" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="ROBUST_PROTOTYPE" value="true" />
+    </context>
+  </template>
+
+  <template name="proto"
+            value="$DASH$type: $KIND$&#10;  id: $ID$&#10;$END$"
+            description="Prototype declaration of any kind"
+            toReformat="false"
+            toShortenFQNames="false">
+    <variable name="DASH" expression="robustSequenceDash()" defaultValue="" alwaysStopAt="false" />
+    <variable name="KIND" expression="complete()" defaultValue="" alwaysStopAt="true" />
+    <variable name="ID" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="ROBUST_PROTOTYPE" value="true" />
+    </context>
+  </template>
+
+  <template name="comp"
+            value="$DASH$type: $COMPONENT$&#10;  $END$"
+            description="Component of an entity"
+            toReformat="false"
+            toShortenFQNames="false">
+    <variable name="DASH" expression="robustSequenceDash()" defaultValue="" alwaysStopAt="false" />
+    <variable name="COMPONENT" expression="complete()" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="ROBUST_PROTOTYPE" value="true" />
+    </context>
+  </template>
+</templateSet>

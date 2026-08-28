@@ -2,9 +2,9 @@
 /.intellijPlatform/
 [Bb]in/
 [Oo]bj/
-build
-output
-.gradle
+build/
+output/
+.gradle/
 .kotlin/
 .tmp
 
@@ -24,3 +24,7 @@ output
 .vs
 _ReSharper*
 _dotTrace*
+
+# Working notes: the journal (.claude/CLAUDE.md) is tracked, review scratch is not
+/.claude/REVIEW.md
+/.claude/review-*.md

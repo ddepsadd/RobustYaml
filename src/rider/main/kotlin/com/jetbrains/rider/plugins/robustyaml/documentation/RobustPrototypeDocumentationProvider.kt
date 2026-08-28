@@ -111,7 +111,7 @@ internal fun categoryAt(declaration: YAMLKeyValue, file: String): CategoryDeclar
     )
 }
 
-private class PrototypeDocumentationTarget(
+internal class PrototypeDocumentationTarget(
     private val project: Project,
     private val id: String,
     private val root: String?,

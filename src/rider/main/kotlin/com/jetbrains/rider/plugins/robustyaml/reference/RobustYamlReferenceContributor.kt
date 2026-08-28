@@ -248,8 +248,13 @@ private object SpriteStateReferenceProvider : PsiReferenceProvider() {
     }
 }
 
-class SpriteStateReference(scalar: YAMLScalar, private val spritePath: String) :
-    PsiReferenceBase<YAMLScalar>(scalar, ElementManipulators.getValueTextRange(scalar), true) {
+/**
+ * Takes any element with a manipulator, not a [YAMLScalar]: the same state is written in C# as the
+ * argument after the `.rsi` of `new SpriteSpecifier.Rsi(…)`, and there the carrier is a
+ * `CSharpStringLiteralExpression`.
+ */
+class SpriteStateReference(element: PsiElement, private val spritePath: String) :
+    PsiReferenceBase<PsiElement>(element, ElementManipulators.getValueTextRange(element), true) {
 
     override fun resolve(): PsiElement? {
         val rsi = rsiDirectory() ?: return null
@@ -292,11 +297,11 @@ private object ResourcePathReferenceProvider : PsiReferenceProvider() {
 
 class ResourcePathReferenceSet(
     path: String,
-    scalar: YAMLScalar,
+    element: PsiElement,
     startInElement: Int,
     provider: PsiReferenceProvider,
     private val absolute: Boolean,
-) : FileReferenceSet(path, scalar, startInElement, provider, true) {
+) : FileReferenceSet(path, element, startInElement, provider, true) {
 
     override fun computeDefaultContexts(): Collection<PsiFileSystemItem> {
         val project = element.project

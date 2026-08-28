@@ -31,7 +31,7 @@ class RobustLocalizationDocumentationProvider : DocumentationTargetProvider {
     }
 }
 
-private class MessageDocumentationTarget(
+internal class MessageDocumentationTarget(
     private val project: Project,
     private val id: String,
 ) : DocumentationTarget {

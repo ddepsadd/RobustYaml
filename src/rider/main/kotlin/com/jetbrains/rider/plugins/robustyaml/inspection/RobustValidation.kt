@@ -15,6 +15,7 @@ import com.jetbrains.rider.plugins.robustyaml.lookup.RobustGuidebook
 import com.jetbrains.rider.plugins.robustyaml.lookup.RobustLocalization
 import com.jetbrains.rider.plugins.robustyaml.lookup.RobustMigrations
 import com.jetbrains.rider.plugins.robustyaml.lookup.RobustPrototypeIndex
+import com.jetbrains.rider.plugins.robustyaml.lookup.RobustSprites
 import com.jetbrains.rider.plugins.robustyaml.quickfix.ChangeEnumValueFix
 import com.jetbrains.rider.plugins.robustyaml.quickfix.ChangeFieldNameFix
 import com.jetbrains.rider.plugins.robustyaml.quickfix.ChangeLocalizationIdFix
@@ -385,6 +386,48 @@ object RobustValidation {
         return DECIMAL_FORM.matches(raw.dropLast(1))
     }
 
+    /**
+     * A `state:` that names no frame of the `.rsi` it is written against.
+     *
+     * The sprite is usually not on the same line, so [RobustSprites] walks for it; where it cannot
+     * be found, or where the directory is not in the checkout, nothing is said. The level is an
+     * error because the engine treats it as one: `SpriteComponent` logs
+     * `State '{0}' does not exist in RSI` and draws the fallback texture, so the sprite is broken
+     * at every spawn rather than at some later use — and for the `{ sprite:, state: }` form
+     * `ClientSpriteSpecifierSerializer` answers `ErrorNode("Invalid RSI state")`, which fails the
+     * YAML linter in CI.
+     *
+     * `MeasureStates` on ss14-wega: 13315 values, 11520 checked (5507 of them through an inherited
+     * sprite), 3 findings and all three real.
+     */
+    fun spriteStates(keyValue: YAMLKeyValue): List<EnumProblem> {
+        if (keyValue.keyText != STATE_KEY) return emptyList()
+        val scalar = keyValue.value as? YAMLScalar ?: return emptyList()
+        val value = scalar.textValue
+        if (value.isEmpty() || !looksLikeState(value)) return emptyList()
+
+        val declared = RobustSprites.declaredStates(keyValue) ?: return emptyList()
+        if (value in declared) return emptyList()
+
+        return listOf(
+            EnumProblem(
+                scalar,
+                "State '$value' does not exist in the sprite",
+                ChangeEnumValueFix.suggest(value, declared.toList()),
+            )
+        )
+    }
+
+    /**
+     * A state is a file name inside the `.rsi`, so anything that cannot be one is left alone —
+     * a tagged value, an anchor, a number, an interpolated placeholder.
+     */
+    private fun looksLikeState(text: String): Boolean {
+        if (text in NON_IDS) return false
+        if (text.toDoubleOrNull() != null) return false
+        return text.all { it.isLetterOrDigit() || it == '_' || it == '-' || it == '+' || it == '.' }
+    }
+
     private fun checkEnum(
         values: List<String>,
         element: YAMLScalar,
@@ -709,4 +752,6 @@ object RobustValidation {
         ).split(' ')
 
     private val NAMED_COLOR_SET = NAMED_COLORS.toSet()
+
+    private const val STATE_KEY = "state"
 }

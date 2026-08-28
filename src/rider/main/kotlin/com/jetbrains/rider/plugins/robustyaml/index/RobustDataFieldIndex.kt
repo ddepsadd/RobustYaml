@@ -396,7 +396,7 @@ class RobustDataFieldIndex : FileBasedIndexExtension<String, String>() {
             var i = 0
             while (i < text.length) {
                 val current = text[i]
-                val next = if (i + 1 < text.length) text[i + 1] else ' '
+                val next = if (i + 1 < text.length) text[i + 1] else '\u0000'
                 when (state) {
                     CODE -> {
                         starts[i]?.let { pending = it }

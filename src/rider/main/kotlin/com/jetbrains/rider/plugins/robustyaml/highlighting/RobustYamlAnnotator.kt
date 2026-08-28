@@ -36,6 +36,7 @@ class RobustYamlAnnotator : Annotator {
                     reportDuplicateId(element, holder)
                     reportPrototypeIdValues(element, holder)
                     reportEnumValues(element, holder)
+                    reportSpriteStates(element, holder)
                     reportScalarValues(element, holder)
                     reportLocalizationIds(element, holder)
                 }
@@ -97,6 +98,17 @@ class RobustYamlAnnotator : Annotator {
 
     private fun reportEnumValues(keyValue: YAMLKeyValue, holder: AnnotationHolder) {
         for (problem in RobustValidation.enumValues(keyValue)) {
+            var builder = holder.newAnnotation(HighlightSeverity.ERROR, problem.message)
+                .range(problem.element)
+            for ((rank, suggestion) in problem.suggestions.withIndex()) {
+                builder = builder.withFix(ChangeEnumValueFix(problem.element, suggestion, rank))
+            }
+            builder.create()
+        }
+    }
+
+    private fun reportSpriteStates(keyValue: YAMLKeyValue, holder: AnnotationHolder) {
+        for (problem in RobustValidation.spriteStates(keyValue)) {
             var builder = holder.newAnnotation(HighlightSeverity.ERROR, problem.message)
                 .range(problem.element)
             for ((rank, suggestion) in problem.suggestions.withIndex()) {

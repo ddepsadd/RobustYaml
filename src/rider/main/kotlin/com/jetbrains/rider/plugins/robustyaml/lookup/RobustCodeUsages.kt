@@ -83,14 +83,21 @@ class PrototypeIdCodeReference(
  * update is not one, and the index would refuse to answer.
  */
 internal fun codeLinkAt(file: PsiFile, offset: Int): CodeLink? {
-    if (!file.name.endsWith(".${RobustCodeLinks.EXTENSION}", ignoreCase = true)) return null
     if (DumbService.isDumb(file.project)) return null
-
     return ReadAction.compute<CodeLink?, RuntimeException> {
-        val links = CachedValuesManager.getCachedValue(file) {
-            CachedValueProvider.Result.create(RobustCodeLinks.links(file.viewProvider.contents), file)
-        }
-        RobustCodeLinks.at(links, offset)
+        RobustCodeLinks.at(codeLinks(file), offset)
+    }
+}
+
+/**
+ * Every link of a `.cs` file, cached against it. Read without asking whether the indexes are ready:
+ * what a literal names is decided by the text alone, and a reference provider that answered nothing
+ * while the project was indexing would have that emptiness cached along with the element.
+ */
+internal fun codeLinks(file: PsiFile): List<CodeLink> {
+    if (!file.name.endsWith(".${RobustCodeLinks.EXTENSION}", ignoreCase = true)) return emptyList()
+    return CachedValuesManager.getCachedValue(file) {
+        CachedValueProvider.Result.create(RobustCodeLinks.links(file.viewProvider.contents), file)
     }
 }
 

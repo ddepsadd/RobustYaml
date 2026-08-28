@@ -2,7 +2,7 @@
   <id>com.jetbrains.rider.plugins.robustyaml</id>
   <name>RobustYaml</name>
   <version>_PLACEHOLDER_</version>
-  <vendor url="https://project-url">Author</vendor>
+  <vendor url="https://github.com/ddepsadd/RobustYaml">Depsad</vendor>
   <idea-version since-build="_PLACEHOLDER_" until-build="_PLACEHOLDER_" />
   <depends>com.intellij.modules.rider</depends>
 
@@ -27,6 +27,30 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.highlighting.RobustYamlColorSettingsPage" />
     <colorProvider
         implementation="com.jetbrains.rider.plugins.robustyaml.highlighting.RobustColorProvider" />
+    <codeInsight.lineMarkerProvider
+        language="yaml"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.highlighting.RobustSpriteGutter" />
+    <lang.foldingBuilder
+        language="yaml"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.editor.RobustPrototypeFolding" />
+    <yaml.customStructureViewFactory
+        implementation="com.jetbrains.rider.plugins.robustyaml.editor.RobustPrototypeStructureView" />
+    <liveTemplateContext
+        contextId="ROBUST_PROTOTYPE"
+        baseContextId="YAML"
+        implementation="com.jetbrains.rider.plugins.robustyaml.editor.RobustTemplateContext" />
+    <liveTemplateMacro
+        implementation="com.jetbrains.rider.plugins.robustyaml.editor.RobustSequenceDashMacro" />
+    <defaultLiveTemplates file="liveTemplates/RobustYaml" />
+    <codeInsight.declarativeInlayProvider
+        language="yaml"
+        providerId="robustyaml.entity.name"
+        group="VALUES_GROUP"
+        bundle="messages.RobustYamlBundle"
+        nameKey="inlay.entityName"
+        descriptionKey="inlay.entityName.description"
+        isEnabledByDefault="true"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.editor.RobustInlayHints" />
     <fileBasedIndex
         implementation="com.jetbrains.rider.plugins.robustyaml.index.RobustComponentNameIndex" />
     <fileBasedIndex
@@ -64,6 +88,13 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustLocaleDeclarationHandler" />
     <gotoDeclarationHandler
         implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustCodeDeclarationHandler" />
+    <psi.referenceContributor
+        language="C#"
+        implementation="com.jetbrains.rider.plugins.robustyaml.reference.RobustCodeReferenceContributor" />
+    <completion.contributor
+        language="C#"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.completion.RobustCodeCompletionContributor"
+        order="first" />
     <usageTargetProvider
         implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustLocaleUsageTargetProvider" />
     <nonProjectFileWritingAccessExtension
@@ -104,6 +135,14 @@
         implementationClass="com.jetbrains.rider.plugins.robustyaml.inspection.RobustInvalidScalarValueInspection" />
     <localInspection
         language="yaml"
+        shortName="RobustInvalidSpriteState"
+        displayName="Sprite state does not exist"
+        groupName="Robust YAML"
+        level="ERROR"
+        enabledByDefault="true"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.inspection.RobustInvalidSpriteStateInspection" />
+    <localInspection
+        language="yaml"
         shortName="RobustMissingRequiredField"
         displayName="Required datafield is not set"
         groupName="Robust YAML"
@@ -126,6 +165,9 @@
         level="WEAK WARNING"
         enabledByDefault="true"
         implementationClass="com.jetbrains.rider.plugins.robustyaml.inspection.RobustUnknownFieldInspection" />
+    <typeHierarchyProvider
+        language="yaml"
+        implementationClass="com.jetbrains.rider.plugins.robustyaml.navigation.RobustPrototypeHierarchyProvider" />
     <gotoSymbolContributor
         implementation="com.jetbrains.rider.plugins.robustyaml.navigation.RobustPrototypeSymbolContributor" />
     <platform.backend.documentation.targetProvider
@@ -136,6 +178,8 @@
         implementation="com.jetbrains.rider.plugins.robustyaml.documentation.RobustLocalizationDocumentationProvider" />
     <platform.backend.documentation.targetProvider
         implementation="com.jetbrains.rider.plugins.robustyaml.documentation.RobustPrototypeDocumentationProvider" />
+    <platform.backend.documentation.targetProvider
+        implementation="com.jetbrains.rider.plugins.robustyaml.documentation.RobustCodeDocumentationProvider" />
     <psi.referenceContributor
         language="yaml"
         implementation="com.jetbrains.rider.plugins.robustyaml.reference.RobustYamlReferenceContributor" />
@@ -151,9 +195,19 @@
         action="EditorEnter"
         order="last"
         implementationClass="com.jetbrains.rider.plugins.robustyaml.editor.RobustSequenceEnterHandler" />
+    <!--
+      `first` silences the stock YAML contributor, which offers keys already seen in the document
+      with the type of the value instead of the kind. `after liveTemplates` is the other half: this
+      contributor answers `stopHere()`, which stops everyone registered after it, and the templates
+      of this plugin are contributed by `LiveTemplateCompletionContributor` — also `first`, so with
+      no id named the winner between the two would be undefined and `comp` would appear in the
+      lookup only in the positions where we happen to know nothing. Ordering after it costs nothing:
+      that contributor drives the rest of the chain itself (`runRemainingContributors`) and adds the
+      templates once it returns, so `stopHere()` still silences the stock keys.
+    -->
     <completion.contributor
         language="yaml"
-        order="first"
+        order="first, after liveTemplates"
         implementationClass="com.jetbrains.rider.plugins.robustyaml.completion.RobustComponentCompletionContributor" />
     <lookup.charFilter
         implementation="com.jetbrains.rider.plugins.robustyaml.completion.RobustLookupCharFilter" />
@@ -166,7 +220,36 @@
 
   <description>
 <![CDATA[
-<p>Sample description</p>
+<p><b>RobustYaml</b> teaches Rider the YAML prototypes of Robust Toolbox — the format the content
+of Space Station 14 is written in. It reads the C# of the engine and of the content, so what it
+knows about a key is what the game will do with that key.</p>
+
+<ul>
+  <li><b>Completion and validation</b> for component names, prototype kinds, datafields, enum
+  members, flags, colours, vectors, sprite states and prototype ids. Every value is judged by the
+  rule the engine uses to read it, down to the difference between <code>float</code> and
+  <code>TimeSpan</code>.</li>
+
+  <li><b>Navigation</b>: Ctrl+click from <code>parent:</code> to the declaration, from
+  <code>type: Sprite</code> to <code>SpriteComponent.cs</code>, from a resource path to the file,
+  and from a C# string literal straight into the content. Find Usages and Rename cover prototype
+  ids and localization keys across YAML, <code>.ftl</code>, <code>.cs</code>, XAML and the
+  guidebook — in one refactoring, not file by file.</li>
+
+  <li><b>What the player will see</b>: the sprite in the gutter and in the hover, the entity name
+  and the text of a localization message as inline hints, the localized name, description and
+  suffix of a prototype in the popup.</li>
+
+  <li><b>Editing</b>: sequence indentation the way SS14 writes it, live templates, folding,
+  Structure View, Ctrl+H over the inheritance chain, a colour picker for Robust hex.</li>
+</ul>
+
+<p>Prototypes and <code>Resources</code> normally lie outside the solution — the plugin indexes
+them anyway, so everything works on a checkout opened the usual way.</p>
+
+<p>The checks come from the engine's own serializers and are measured against a full content
+checkout: 30 000 prototypes and 56 000 localization messages, with the false positives driven to
+zero before a check ships.</p>
 ]]>
   </description>
 

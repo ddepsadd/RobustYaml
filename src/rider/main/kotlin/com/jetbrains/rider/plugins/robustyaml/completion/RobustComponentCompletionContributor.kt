@@ -10,6 +10,11 @@ import com.intellij.codeInsight.completion.InsertHandler
 import com.intellij.codeInsight.completion.InsertionContext
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
+import com.jetbrains.rider.plugins.robustyaml.lookup.RobustSprites
+import com.jetbrains.rider.plugins.robustyaml.documentation.RobustSpritePreview
+import com.intellij.util.ui.JBImageIcon
+import com.intellij.codeInsight.lookup.LookupElementRenderer
+import com.intellij.codeInsight.lookup.LookupElementPresentation
 import com.intellij.codeInsight.lookup.LookupElementDecorator
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
@@ -410,12 +415,42 @@ private object PrototypeIdProvider : CompletionProvider<CompletionParameters>() 
         logger.debug { "Ids for kind '${kind ?: "any"}': ${ids.size}" }
 
         val typeText = kind ?: "prototype id"
+        // Only entities get a picture, and it is drawn by a renderer rather than by `withIcon`:
+        // the list is 14274 ids long for `entity`, and the platform calls a renderer only for the
+        // rows on screen. Building an icon for every element would walk a chain of parents and
+        // read a PNG fourteen thousand times to show twelve.
+        val renderer = if (kind == ENTITY_KIND) EntitySpriteRenderer(project, typeText) else null
         for (id in ids) {
-            result.addElement(LookupElementBuilder.create(id).withTypeText(typeText, true))
+            val element = LookupElementBuilder.create(id).withTypeText(typeText, true)
+            result.addElement(if (renderer == null) element else element.withRenderer(renderer))
         }
         if (kind != null && ids.isNotEmpty()) result.stopHere()
     }
 }
+
+/**
+ * The sprite of an entity beside its id. The frame is the one the gutter draws, at the same size:
+ * a lookup row is a line tall, so anything bigger would be scaled down by the list anyway.
+ */
+private class EntitySpriteRenderer(
+    private val project: Project,
+    private val typeText: String,
+) : LookupElementRenderer<LookupElement>() {
+    override fun renderElement(element: LookupElement, presentation: LookupElementPresentation) {
+        presentation.itemText = element.lookupString
+        presentation.typeText = typeText
+        presentation.isTypeGrayed = true
+
+        val png = RobustSprites.iconOf(project, element.lookupString) ?: return
+        RobustSpritePreview.fitted(png, ICON_SIZE)?.let { presentation.icon = JBImageIcon(it) }
+    }
+
+    private companion object {
+        const val ICON_SIZE = 16
+    }
+}
+
+private const val ENTITY_KIND = "entity"
 
 private object PrototypeKindProvider : CompletionProvider<CompletionParameters>() {
     override fun addCompletions(

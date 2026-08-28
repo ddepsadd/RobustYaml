@@ -42,4 +42,8 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: ${{ runner.os }}-Test-${{ hashFiles('gradlew.bat', 'src/dotnet/*/*.csproj', 'src/dotnet/*.props', 'gradle/wrapper/gradle-wrapper.properties') }}
+      # Two suites, two steps: the frontend one guards PSI and the editor handlers
+      # (RobustYamlContext, the dash and Enter handlers, sprite paths), and a failure
+      # there says something different than a failure of the ReSharper tests.
+      - run: ./gradlew :test --no-daemon
       - run: ./gradlew :testDotNet --no-daemon

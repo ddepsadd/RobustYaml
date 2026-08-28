@@ -14,6 +14,50 @@ import com.intellij.openapi.util.text.StringUtil
  * also does — an unclosed `[color]` must not bleed into the rest of the popup.
  */
 object RobustMarkup {
+    /**
+     * The same reading without HTML, for places that can only show plain text — an inlay hint has
+     * one colour by definition, and printing `[color=purple]Укус[/color]` beside an id shows the
+     * player nothing they would ever see. Tags are dropped, everything unregistered stays: the rule
+     * about `[redacted]` holds here for the same reason.
+     */
+    fun plain(text: String): String {
+        val out = StringBuilder()
+        val open = ArrayDeque<String>()
+        var at = 0
+
+        while (at < text.length) {
+            val start = text.indexOf('[', at)
+            if (start < 0) {
+                out.append(text, at, text.length)
+                break
+            }
+            out.append(text, at, start)
+
+            val end = text.indexOf(']', start)
+            if (end < 0) {
+                out.append(text, start, text.length)
+                break
+            }
+
+            val literal = text.substring(start, end + 1)
+            val body = text.substring(start + 1, end)
+            val closing = body.startsWith('/')
+            val name = (if (closing) body.substring(1) else body.substringBefore('=')).trim().lowercase()
+            val value = if (closing) null else body.substringAfter('=', "").trim()
+
+            when {
+                closing && open.lastOrNull() == name -> open.removeLast()
+                closing -> out.append(literal)
+                name == BULLET -> out.append("• ")
+                name in CLOSING && (value.isNullOrEmpty() || name == COLOR && isColor(value)) ->
+                    open.addLast(name)
+                else -> out.append(literal)
+            }
+            at = end + 1
+        }
+        return out.toString()
+    }
+
     fun toHtml(text: String): String {
         val html = StringBuilder()
         val open = ArrayDeque<String>()

@@ -6,7 +6,12 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
+import com.intellij.psi.impl.source.resolve.reference.impl.providers.FileReference
+import com.intellij.psi.util.PsiTreeUtil
+import com.jetbrains.rider.languages.fileTypes.csharp.psi.CSharpStringLiteralExpression
 import com.jetbrains.rider.plugins.robustyaml.index.CodeLinkKind
+import com.jetbrains.rider.plugins.robustyaml.reference.PrototypeIdLiteralReference
+import com.jetbrains.rider.plugins.robustyaml.reference.SpriteStateReference
 import com.jetbrains.rider.plugins.robustyaml.lookup.RobustPrototypeIndex
 import com.jetbrains.rider.plugins.robustyaml.lookup.RobustResources
 import com.jetbrains.rider.plugins.robustyaml.lookup.codeLinkAt
@@ -33,6 +38,8 @@ class RobustCodeDeclarationHandler : GotoDeclarationHandler {
         editor: Editor?,
     ): Array<PsiElement>? {
         val file = element?.containingFile ?: return null
+        if (referencedAlready(element)) return null
+
         val link = codeLinkAt(file, offset) ?: return null
         val project = file.project
 
@@ -66,5 +73,20 @@ class RobustCodeDeclarationHandler : GotoDeclarationHandler {
 
         logger.debug { "Goto declaration of ${link.kind} '${link.value}': ${targets?.size ?: 0} targets" }
         return targets
+    }
+}
+
+/**
+ * Whether the literal already carries a reference of ours. Where the PSI of C# is there to hang one
+ * on, the reference does the navigating and this handler would only add a second, identical target
+ * to the popup. Asked of the element rather than assumed, so that the handler keeps working if the
+ * mechanism ever stops: an empty answer means no reference was built, and then there is a jump to
+ * make here.
+ */
+private fun referencedAlready(element: PsiElement): Boolean {
+    val literal = PsiTreeUtil.getParentOfType(element, CSharpStringLiteralExpression::class.java, false)
+        ?: return false
+    return literal.references.any {
+        it is SpriteStateReference || it is PrototypeIdLiteralReference || it is FileReference
     }
 }
