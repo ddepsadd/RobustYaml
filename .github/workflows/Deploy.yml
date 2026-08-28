@@ -67,13 +67,21 @@ jobs:
       - name: Describe the build for the custom repository
         run: |
           python3 - <<'PY'
-          import glob, os, re, zipfile
+          import glob, io, os, zipfile
           from xml.etree import ElementTree
 
+          # The descriptor is not in the zip itself: buildPlugin ships <plugin>/lib/*.jar and
+          # plugin.xml lives inside the jar, so the zip has to be opened twice. Both jars are
+          # tried because the searchableOptions one carries no descriptor at all.
           zip_path = glob.glob('output/*.zip')[0]
           with zipfile.ZipFile(zip_path) as zf:
-              name = next(n for n in zf.namelist() if n.endswith('META-INF/plugin.xml'))
-              plugin = ElementTree.fromstring(zf.read(name))
+              for jar in (n for n in zf.namelist() if n.endswith('.jar')):
+                  with zipfile.ZipFile(io.BytesIO(zf.read(jar))) as inner:
+                      if 'META-INF/plugin.xml' in inner.namelist():
+                          plugin = ElementTree.fromstring(inner.read('META-INF/plugin.xml'))
+                          break
+              else:
+                  raise SystemExit(f'No META-INF/plugin.xml inside any jar of {zip_path}')
 
           def text(tag, default=''):
               node = plugin.find(tag)
