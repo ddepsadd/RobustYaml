@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Application.Parts;
 using JetBrains.Application.Progress;
-using JetBrains.Lifetimes;
 using JetBrains.Metadata.Reader.API;
 using JetBrains.ProjectModel;
 using JetBrains.Rd.Tasks;
@@ -27,7 +26,7 @@ namespace ReSharperPlugin.RobustYaml
     {
         private readonly ISolution mySolution;
 
-        public RobustYamlHost(Lifetime lifetime, ISolution solution)
+        public RobustYamlHost(ISolution solution)
         {
             mySolution = solution;
             var model = solution.GetProtocolSolution().GetRobustYamlModel();
@@ -58,7 +57,34 @@ namespace ReSharperPlugin.RobustYaml
             public List<string> Value;
         }
 
+        /// <summary>
+        /// Everything here is guarded, and the guard is not caution but arithmetic. Building a type
+        /// in an implicit universal context throws — <c>CSharpTypeFactory.CreateType</c> with an NRE,
+        /// <c>GetRuntimeFeatures</c> with an assert — and the branch that gets there is reachable:
+        /// a module without a containing project falls back to the explicit universal context, which
+        /// silences the assert without making the types build. A throw is answered by the frontend
+        /// with a warning and a dropped cache entry, so the same type is asked again on the next pass
+        /// of the daemon, and the next, each time paying for the whole symbol lookup. Answering
+        /// <see cref="Unbuilt"/> instead says the same thing — "I could not" — for the price of one
+        /// call. Cancellation is not an answer and is left to propagate.
+        /// </summary>
         private RobustFieldsReply Fields(string className, List<string> path)
+        {
+            try
+            {
+                return FieldsUnguarded(className, path);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                return Unbuilt;
+            }
+        }
+
+        private RobustFieldsReply FieldsUnguarded(string className, List<string> path)
         {
             using (ReadLockCookie.Create())
             {
@@ -106,7 +132,11 @@ namespace ReSharperPlugin.RobustYaml
                         continue;
                     }
 
-                    var step = Collect(type).FirstOrDefault(it => it.Name == segment);
+                    var members = Collect(type, out var walked);
+                    if (!walked)
+                        return Unbuilt;
+
+                    var step = members.FirstOrDefault(it => it.Name == segment);
                     if (step == null)
                         return Resolved(result);
 
@@ -119,7 +149,11 @@ namespace ReSharperPlugin.RobustYaml
                         return Resolved(result);
                 }
 
-                foreach (var field in Collect(type))
+                var fields = Collect(type, out var complete);
+                if (!complete)
+                    return Unbuilt;
+
+                foreach (var field in fields)
                 {
                     var presentable = field.Type.GetPresentableName(type.PresentationLanguage);
                     if (presentable.Contains(Unresolved))
@@ -173,6 +207,22 @@ namespace ReSharperPlugin.RobustYaml
         /// </summary>
         private RobustImplementationsReply Implementations(string className, List<string> path)
         {
+            try
+            {
+                return ImplementationsUnguarded(className, path);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                return UnbuiltImplementations;
+            }
+        }
+
+        private RobustImplementationsReply ImplementationsUnguarded(string className, List<string> path)
+        {
             using (ReadLockCookie.Create())
             {
                 var services = mySolution.GetPsiServices();
@@ -218,7 +268,11 @@ namespace ReSharperPlugin.RobustYaml
                         continue;
                     }
 
-                    var step = Collect(type).FirstOrDefault(it => it.Name == segment);
+                    var members = Collect(type, out var walked);
+                    if (!walked)
+                        return UnbuiltImplementations;
+
+                    var step = members.FirstOrDefault(it => it.Name == segment);
                     if (step == null)
                         return NoImplementations;
 
@@ -231,7 +285,13 @@ namespace ReSharperPlugin.RobustYaml
                         return NoImplementations;
                 }
 
-                var names = new List<string>();
+                // A set, because what is collected are short names and those collide: `EntityPrototype`
+                // is declared four times in the content — the prototype, a nested type in
+                // `SpriteSpecifier` and two in the engine's own tests. Validation would not notice,
+                // it only asks whether a name is in the list; completion would show the same row
+                // twice with nothing to choose between. Sorted on the way out so that the order of
+                // the list does not depend on the order the search happened to walk the solution in.
+                var names = new HashSet<string>(StringComparer.Ordinal);
                 if (Instantiable(type))
                     names.Add(type.ShortName);
 
@@ -253,7 +313,8 @@ namespace ReSharperPlugin.RobustYaml
                 if (names.Count >= InheritorLimit)
                     return NoImplementations;
 
-                return new RobustImplementationsReply(true, names);
+                return new RobustImplementationsReply(
+                    true, names.OrderBy(it => it, StringComparer.Ordinal).ToList());
             }
         }
 
@@ -360,9 +421,19 @@ namespace ReSharperPlugin.RobustYaml
                 builder.Append(symbol);
             }
 
-            return builder.Length > DefaultLimit
-                ? builder.ToString(0, DefaultLimit) + "…"
-                : builder.ToString();
+            if (builder.Length <= DefaultLimit)
+                return builder.ToString();
+
+            // Length counts UTF-16 units, not characters: anything outside the basic plane takes two
+            // of them, and cutting at exactly the limit can land between the halves. What would be
+            // shipped then is a lone surrogate — not a character in any sense, and drawn as garbage.
+            // The default value of a field is arbitrary text out of somebody's code, so "it is all
+            // ASCII anyway" is not an assumption to make.
+            var cut = DefaultLimit;
+            if (char.IsHighSurrogate(builder[cut - 1]))
+                cut--;
+
+            return builder.ToString(0, cut) + "…";
         }
 
         private const int DefaultLimit = 80;
@@ -377,7 +448,17 @@ namespace ReSharperPlugin.RobustYaml
                 .GetOrCreateModuleResolveContext(containing, module, module.TargetFrameworkId);
         }
 
-        private List<Field> Collect(ITypeElement root)
+        /// <summary>
+        /// <paramref name="complete"/> is false when the walk stopped at <see cref="MaxTypes"/> with
+        /// types still queued. It has to travel with the list, because a truncated list is not a
+        /// smaller answer but a different one: the frontend keeps a resolved reply in <c>ready</c>
+        /// until a `.cs` changes, so fields that were never reached would be missing for the rest of
+        /// the session — keys that exist would be painted as unknown, and no amount of re-asking
+        /// would fix it, since nothing would be asked again. The same rule already governs
+        /// <see cref="InheritorLimit"/>: a limit reports "nothing is known here", never a result.
+        /// Measured on ss14-wega, the widest hierarchy reaches 10 types of the 32 allowed.
+        /// </summary>
+        private List<Field> Collect(ITypeElement root, out bool complete)
         {
             var result = new List<Field>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -446,6 +527,7 @@ namespace ReSharperPlugin.RobustYaml
                 }
             }
 
+            complete = queue.Count == 0;
             return result;
         }
 
@@ -578,7 +660,11 @@ namespace ReSharperPlugin.RobustYaml
 
             var result = new Kinds { Value = KindOfType(UnwrapType(type, module)) };
 
-            var declared = type as IDeclaredType;
+            // Unlift first, as everywhere else here: `X?` over a value type is a real Nullable<>
+            // wrapper, and reading through it is what once cost the Prototype section of the hover
+            // on 326 declarations of `EntProtoId?`. A dictionary is a class, so today the cast would
+            // survive without it — which is exactly how the habit gets lost.
+            var declared = type.Unlift() as IDeclaredType;
             if (declared != null)
             {
                 var keys = CollectionTypeUtil.GetElementTypesForGenericType(

@@ -6,15 +6,15 @@
     <SdkVersion>2026.2.0.1</SdkVersion>
 
     <Title>RobustYaml</Title>
-    <Description>Description</Description>
+    <Description>Rider support for the YAML prototypes of Robust Toolbox, the format the content of Space Station 14 is written in: completion and validation driven by the C# of the engine, navigation between YAML, localization and code, sprite previews and prototype hierarchy.</Description>
 
-    <Authors>Author</Authors>
-    <Copyright>Copyright $([System.DateTime]::Now.Year) Maintainers of RobustYaml</Copyright>
-    <PackageTags>resharper plugin</PackageTags>
+    <Authors>Depsad</Authors>
+    <Copyright>Copyright $([System.DateTime]::Now.Year) Depsad</Copyright>
+    <PackageTags>rider resharper plugin yaml space-station-14 robust-toolbox</PackageTags>
 
-    <PackageProjectUrl></PackageProjectUrl>
-    <PackageLicenseUrl></PackageLicenseUrl>
-    <PackageIconUrl></PackageIconUrl>
+    <PackageProjectUrl>https://github.com/ddepsadd/RobustYaml</PackageProjectUrl>
+    <!-- PackageLicenseUrl is deprecated by NuGet; an SPDX expression is the current form. -->
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
   </PropertyGroup>
 
 </Project>
